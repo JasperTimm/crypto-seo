@@ -6,9 +6,9 @@ const  googleIt = require('google-it')
 // with a Boolean value indicating whether or not they
 // should be required.
 const customParams = {
-  term: ['term'],
-  site: ['site'],
-  domain: ['domain'],
+  term: true,
+  site: true,
+  domainMatch: false,
   engine: false
 }
 
@@ -22,18 +22,24 @@ const createRequest = (input, callback) => {
   }
   const jobRunID = validator.validated.id
   const term = validator.validated.data.term.toLowerCase()
-  const site = validator.validated.data.site.toLowerCase()
+  const site = new URL(validator.validated.data.site.toLowerCase())
+  const domainMatch = validator.validated.data.domainMatch || false
   const engine = validator.validated.data.engine || 'google'
 
-  googleIt({"query": term, "no-display": true}).then(results => {
+  googleIt({"query": term}).then(results => {
     var siteRank = 0
     for (var i = 0; i < results.length; i++) {
-      var res = results[i]
-      if (res.link == site && siteRank == 0) siteRank = i
+      var resURL = new URL(results[i].link)
+      if ((domainMatch && resURL.hostname == site.hostname) ||
+       resURL.href == site.href) {
+         siteRank = i
+         continue
+      }
     }
-      // It's common practice to store the desired value at the top-level
-      // result key. This allows different adapters to be compatible with
-      // one another.
+
+    // It's common practice to store the desired value at the top-level
+    // result key. This allows different adapters to be compatible with
+    // one another.
     var response = {
       data: { rank: siteRank, result: siteRank },
       status: 200,
