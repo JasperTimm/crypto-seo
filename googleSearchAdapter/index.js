@@ -32,7 +32,7 @@ const createRequest = (input, callback) => {
       var resURL = new URL(results[i].link)
       if ((domainMatch && resURL.hostname == site.hostname) ||
        resURL.href == site.href) {
-         siteRank = i
+         siteRank = i + 1
          continue
       }
     }
