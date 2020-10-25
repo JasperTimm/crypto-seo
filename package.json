@@ -17,6 +17,8 @@
     "@babel/polyfill": "^7.12.1",
     "@babel/preset-env": "^7.12.1",
     "@babel/preset-react": "^7.12.1",
+    "@chainlink/contracts": "0.0.10",
+    "@truffle/contract": "^4.2.27",
     "babel-loader": "^8.1.0",
     "bootstrap": "^4.5.3",
     "child_process": "^1.0.2",
