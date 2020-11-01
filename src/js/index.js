@@ -1,46 +1,76 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
-// import Web3 from 'web3'
+import Web3 from 'web3'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Button from 'react-bootstrap/Button'
 import { Container, Navbar, Form, Card } from 'react-bootstrap'
 const request = require('request')
+const CryptoSEO = require('../../build/contracts/CryptoSEO')
 
 class App extends React.Component {
    constructor(props){
       super(props)
       this.state = {
-          searchTerm: '',
-          siteName: ''
+        searchTerm: '',
+        siteName: '',
+        durationUnits: 'Minutes'
       }
 
       this.setupListeners()
 
-    //   if (ethereum) {
-    //      console.log("Using web3 detected from external source like Metamask")
-    //      this.web3 = new Web3(ethereum)
-    //   } else {
-    //      console.log("No web3 detected.")
-    //   }
-
-    //   const MyContract = web3.eth.contract()
-    //   this.state.ContractInstance = MyContract.at("0x1ACd4B6005b4B27d78dc40b5DDFc98FE49b7CF16")
-
-      window.a = this.state
+      if (ethereum) {
+        console.log("Using web3 detected from external source like Metamask")
+        this.web3 = new Web3(ethereum)
+        ethereum.on('accountsChanged', this.handleAccountsChanged)
+        ethereum.on('chainChanged', this.handleChainChanged)
+        ethereum.autoRefreshOnNetworkChange = false
+      } else {
+        console.error("No web3 detected.")
+        return
+      }
    }
 
-    componentDidMount() {
+    componentDidMount() {      
     }
 
     setupListeners() {
-        this.connectEthereum = this.connectEthereum.bind(this)
-        this.refreshSearchRank = this.refreshSearchRank.bind(this)
-        this.handleChange = this.handleChange.bind(this)
+      this.connectEthereum = this.connectEthereum.bind(this)
+      this.refreshSearchRank = this.refreshSearchRank.bind(this)
+      this.handleChange = this.handleChange.bind(this)
+      this.createContract = this.createContract.bind(this)
+      this.handleChainChanged = this.handleChainChanged.bind(this)
+      this.handleAccountsChanged = this.handleAccountsChanged.bind(this)
     }
 
     connectEthereum() {
-        console.log("Connect clicked")
-        // ethereum.enable()
+      console.log("Connect clicked")
+      ethereum
+        .request({ method: 'eth_requestAccounts' })
+        .then(this.handleAccountsChanged)
+        .catch((err) => {
+          if (err.code === 4001) {
+            console.log('Please connect to Metamask.')
+          } else {
+            console.error(err)
+          }
+        })
+    }
+
+    handleAccountsChanged(accounts) {
+      console.log("Accounts changed")
+      this.state.currentAccount = accounts[0]
+    }
+
+    handleChainChanged() {
+      console.log("Chain changed to: " + ethereum.chainId)
+      
+      const networkId = String(parseInt(ethereum.chainId))
+      console.log("Network ID is: " + networkId)
+      if (CryptoSEO.networks[networkId] == undefined) {
+          console.error("CryptoSEO contract not deployed to this network")
+          return
+      }
+      this.state.CryptoSEOContract = new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address)
     }
 
     refreshSearchRank() {
@@ -54,8 +84,48 @@ class App extends React.Component {
     }
 
     handleChange(evt) {
-        const value = evt.target.value
-        this.setState({...this.state, [evt.target.name]: value})
+      const value = evt.target.value
+      this.setState({...this.state, [evt.target.name]: value})
+    }
+
+    createContract() {
+      let timeNow = Math.floor(Date.now() / 1000)
+      let expiryTime = 0
+      if (this.state.durationUnits == "Minutes") {
+        expiryTime = timeNow + this.state.durationAmt * 60
+      } else if (this.state.durationUnits == "Hours") {
+        expiryTime = timeNow + this.state.durationAmt * 60 * 60
+      } else if (this.state.durationUnits == "Days") {
+        expiryTime = timeNow + this.state.durationAmt * 60 * 60 * 24
+      } else {
+        console.error("Unknown unit type")
+        return
+      }
+      
+      let callObj = {
+        site: this.state.siteName,
+        searchTerm: this.state.searchTerm,
+        domainMatch: this.state.domainMatch == "on",
+        initialSearchRank: parseInt(this.state.initialSearchRank),
+        amtPerRankEth: this.web3.utils.toWei(this.state.amtPerRankEth, "ether"),
+        maxAmtEth: this.web3.utils.toWei(this.state.maxAmtEth, "ether"),
+        expiryTime: expiryTime,
+        payee: this.state.payee
+      }
+
+      console.log("About to call createSEOContract with...")
+      console.log(callObj)
+
+      this.state.CryptoSEOContract.methods.createSEOContract(callObj.site, callObj.searchTerm, callObj.domainMatch,
+        callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.expiryTime, callObj.payee).send( 
+        {value: callObj.maxAmtEth, from: this.state.currentAccount},
+        (err, result) => {
+          if (err) {
+            console.error(err)
+          } else {
+            console.log(result)
+          }
+        })
     }
 
     render(){
@@ -80,11 +150,14 @@ class App extends React.Component {
                             <Form.Label>Site name</Form.Label>
                             <Form.Control name="siteName" onChange={this.handleChange} placeholder="Enter site name" />
                         </Form.Group>
+                        <Form.Group controlId="formDomainMatch">
+                            <Form.Check type="checkbox" label="Domain Match" name="domainMatch" onChange={this.handleChange} />
+                        </Form.Group>                        
                         <Form.Group controlId="formCurrentRank">
                             <Form.Label>Current rank</Form.Label>
                             <br/>
                             <Button onClick={this.refreshSearchRank} variant="success">Refresh</Button>
-                            <Form.Control ref={this.searchRankRef} placeholder="Site ranking" />
+                            <Form.Control name="initialSearchRank" onChange={this.handleChange} placeholder="Site ranking" />
                         </Form.Group>                        
                     </Form>
                 </Card.Body>
@@ -96,18 +169,27 @@ class App extends React.Component {
                     <Form>
                         <Form.Group controlId="formRecipAddr">
                             <Form.Label>Recipient eth address</Form.Label>
-                            <Form.Control placeholder="Enter eth address" />
+                            <Form.Control name="payee" onChange={this.handleChange} placeholder="Enter eth address" />
                         </Form.Group>
                         <Form.Group controlId="formEthAmtPerRank">
                             <Form.Label>Amount eth per rank increase</Form.Label>
-                            <Form.Control placeholder="Enter amount in eth" />
+                            <Form.Control name="amtPerRankEth"  onChange={this.handleChange} placeholder="Enter amount in eth" />
                         </Form.Group>
                         <Form.Group controlId="formMaxEthAmt">
                             <Form.Label>Max amount eth to spend</Form.Label>
-                            <Form.Control placeholder="Enter max amount in eth" />
-                        </Form.Group>                        
+                            <Form.Control name="maxAmtEth"  onChange={this.handleChange} placeholder="Enter max amount in eth" />
+                        </Form.Group>
+                        <Form.Group controlId="formDuration">
+                            <Form.Label>Contract duration</Form.Label>
+                            <Form.Control name="durationAmt"  onChange={this.handleChange} placeholder="Enter duration" />
+                            <Form.Control name="durationUnits"  onChange={this.handleChange} as="select">
+                              <option>Minutes</option>
+                              <option>Hours</option>
+                              <option>Days</option>
+                            </Form.Control>
+                        </Form.Group>                                                
                         <Form.Group>
-                            <Button variant="success">Create contract</Button>
+                            <Button onClick={this.createContract} variant="success">Create contract</Button>
                         </Form.Group>                        
                     </Form>
                 </Card.Body>
