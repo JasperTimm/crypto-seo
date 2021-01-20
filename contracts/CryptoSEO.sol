@@ -1,7 +1,9 @@
-pragma solidity 0.4.24;
+//SPDX-License-Identifier: UNLICENSED
 
-import "@chainlink/contracts/src/v0.4/ChainlinkClient.sol";
-import "@chainlink/contracts/src/v0.4/vendor/Ownable.sol";
+pragma solidity 0.6.12;
+
+import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
+import "@chainlink/contracts/src/v0.6/vendor/Ownable.sol";
 
 contract CryptoSEO is ChainlinkClient, Ownable {
   uint256 constant private ORACLE_PAYMENT = 1 * LINK;
@@ -16,8 +18,8 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     uint256 amtPerRankEth;
     uint256 maxPayableEth;
     uint256 timeToExecute; // in secs since Epoch
-    address payee;
-    address payer;
+    address payable payee;
+    address payable payer;
     SeoContractStatus status;
   }
 
@@ -41,7 +43,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     oracle = _oracle;
   }
 
-  function setGoogleSearchJobId(string _jobid) public onlyOwner {
+  function setGoogleSearchJobId(string calldata _jobid) public onlyOwner {
     googleSearchJobId = _jobid;
   }
 
@@ -49,9 +51,9 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     msg.sender.transfer(address(this).balance);
   } 
 
-  function createSEOContract(string site, string searchTerm, bool domainMatch,
+  function createSEOContract(string calldata site, string calldata searchTerm, bool domainMatch,
     uint256 initialSearchRank, uint256 amtPerRankEth, uint256 maxPayableEth,
-    uint256 timeToExecute, address payee) public payable returns (uint256) {
+    uint256 timeToExecute, address payable payee) public payable returns (uint256) {
     require(msg.value == maxPayableEth, "Eth sent didn't match maxPayableEth");
     require(maxPayableEth > amtPerRankEth, "maxPayableEth must be larger than amtPerRankEth");
     require(initialSearchRank > 0, "initialSearchRank must be non-zero");
@@ -74,9 +76,9 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     delete seoContractList[contractID];
   }
 
-  function requestGoogleSearch(SEOContract cont, bytes4 callbackSelector) private returns (bytes32)
+  function requestGoogleSearch(SEOContract memory cont, bytes4 callbackSelector) private returns (bytes32)
   {
-    Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(googleSearchJobId), this, callbackSelector);
+    Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(googleSearchJobId), address(this), callbackSelector);
     req.add("term", cont.searchTerm);
     req.add("site", cont.site);
     if (cont.domainMatch) {
