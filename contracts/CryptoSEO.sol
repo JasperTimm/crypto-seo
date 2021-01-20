@@ -38,6 +38,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
   mapping (uint256=>SEOContract) public seoContractList;
   mapping (bytes32=>SearchRequest) public requestMap;
+  mapping (address=>uint256) payoutAmt;
 
   uint256 public numSEOContracts;
   address public oracle;
@@ -130,21 +131,30 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(cont.status == SeoContractStatus.Processing, "Contract not in processing status");
     delete seoContractList[req.contractId];
 
+    uint256 payerBal = payoutAmt[cont.payer];
+    uint256 payeeBal = payoutAmt[cont.payee];
     if (_rank == 0 || _rank > cont.initialSearchRank) {
       // Search rank was worse, return funds to payer
-      cont.payer.transfer(cont.maxPayableEth);
+      payoutAmt[cont.payer] = payerBal + cont.maxPayableEth;
       return;
     }
     uint256 payForRankInc = (cont.initialSearchRank - _rank) * cont.amtPerRankEth;
     if (payForRankInc > cont.maxPayableEth) {
-      cont.payee.transfer(cont.maxPayableEth);
+      payoutAmt[cont.payee] = payeeBal + cont.maxPayableEth;
       return;
     } else {
       uint256 refund = cont.maxPayableEth - payForRankInc;
-      cont.payee.transfer(payForRankInc);
-      cont.payer.transfer(refund);
+      payoutAmt[cont.payer] = payerBal + refund;
+      payoutAmt[cont.payee] = payeeBal + payForRankInc;
       return;
     }
+  }
+
+  function withdrawPayout() public {
+    require(payoutAmt[msg.sender] > 0, "Nothing to payout");
+    uint256 bal = payoutAmt[msg.sender];
+    payoutAmt[msg.sender] = 0;
+    msg.sender.transfer(bal);
   }
 
   function getChainlinkToken() public view returns (address) {
