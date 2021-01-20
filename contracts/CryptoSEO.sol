@@ -7,13 +7,15 @@ import "@chainlink/contracts/src/v0.6/vendor/Ownable.sol";
 
 contract CryptoSEO is ChainlinkClient, Ownable {
   uint256 constant private ORACLE_PAYMENT = 1 * LINK;
+  uint256 constant private REQUEST_EXPIRY = 1 days;
 
-  enum SeoContractStatus { Created, Processing, Completed }
+  enum SeoContractStatus { Created, Processing }
 
   struct SEOContract {
+    bool isValue;
+    bool domainMatch;
     string site;
     string searchTerm;
-    bool domainMatch;
     uint256 initialSearchRank;
     uint256 amtPerRankEth;
     uint256 maxPayableEth;
@@ -23,13 +25,20 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     SeoContractStatus status;
   }
 
+  struct SearchRequest {
+    bool isValue;
+    uint256 contractId;
+    uint256 requestTime;
+  }
+
   event RequestGoogleSearchFulfilled(
     bytes32 indexed requestId,
     uint256 indexed rank
   );
 
   mapping (uint256=>SEOContract) public seoContractList;
-  mapping (bytes32=>SEOContract) public procContractList;
+  mapping (bytes32=>SearchRequest) public requestMap;
+
   uint256 public numSEOContracts;
   address public oracle;
   string public googleSearchJobId;
@@ -53,30 +62,32 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
   function createSEOContract(string calldata site, string calldata searchTerm, bool domainMatch,
     uint256 initialSearchRank, uint256 amtPerRankEth, uint256 maxPayableEth,
-    uint256 timeToExecute, address payable payee) public payable returns (uint256) {
+    uint256 timeToExecute, address payable payee) public payable returns (uint256 contractId) {
     require(msg.value == maxPayableEth, "Eth sent didn't match maxPayableEth");
-    require(maxPayableEth > amtPerRankEth, "maxPayableEth must be larger than amtPerRankEth");
+    require(amtPerRankEth > 0, "amtPerRankEth must be greater than zero");
+    require(maxPayableEth >= amtPerRankEth, "maxPayableEth must be larger than or equal to amtPerRankEth");
     require(initialSearchRank > 0, "initialSearchRank must be non-zero");
 
-    SEOContract memory cont = SEOContract(site, searchTerm, domainMatch, initialSearchRank,
+    seoContractList[numSEOContracts] = SEOContract(true, domainMatch, site, searchTerm, initialSearchRank,
       amtPerRankEth, maxPayableEth, timeToExecute, payee, msg.sender, SeoContractStatus.Created);
-    seoContractList[numSEOContracts] = cont;
     numSEOContracts++;
     return numSEOContracts - 1;
   }
 
-  function executeSEOContract(uint256 contractID) public {
-    SEOContract memory cont = seoContractList[contractID];
+  function executeSEOContract(uint256 contractId) public returns (bytes32) {
+    SEOContract memory cont = seoContractList[contractId];
+    require(cont.isValue, "Not a valid contract ID");
     require(cont.status == SeoContractStatus.Created, "Contract is not in 'Created' status");
-    require(block.timestamp > cont.timeToExecute, "Contract is not ready to execute yet");
+    require(now > cont.timeToExecute, "Contract is not ready to execute yet");
     cont.status = SeoContractStatus.Processing;
+    seoContractList[contractId] = cont;
 
     bytes32 requestId = requestGoogleSearch(cont, this.fulfillContract.selector);
-    procContractList[requestId] = cont;
-    delete seoContractList[contractID];
+    requestMap[requestId] = SearchRequest(true, contractId, now);
+    return requestId;
   }
 
-  function requestGoogleSearch(SEOContract memory cont, bytes4 callbackSelector) private returns (bytes32)
+  function requestGoogleSearch(SEOContract memory cont, bytes4 callbackSelector) private returns (bytes32 requestId)
   {
     Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(googleSearchJobId), address(this), callbackSelector);
     req.add("term", cont.searchTerm);
@@ -85,6 +96,20 @@ contract CryptoSEO is ChainlinkClient, Ownable {
       req.add("domainMatch", "true");
     }
     return sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
+  }
+
+  function resetExpiredRequest(bytes32 _requestId) public {
+    SearchRequest memory req = requestMap[_requestId];
+    require(req.isValue, "No such request");
+    require(now > req.requestTime + REQUEST_EXPIRY, "Request has not yet expired");
+    delete requestMap[_requestId];
+
+    SEOContract memory cont = seoContractList[req.contractId];
+    require(cont.isValue, "No contract for that requestId");
+
+    cont.status = SeoContractStatus.Created;
+    seoContractList[req.contractId] = cont;
+    return;
   }
 
   function fulfillContract(bytes32 _requestId, uint256 _rank)
@@ -96,8 +121,14 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
     emit RequestGoogleSearchFulfilled(_requestId, _rank);
 
-    SEOContract memory cont = procContractList[_requestId];
-    delete procContractList[_requestId];
+    SearchRequest memory req = requestMap[_requestId];
+    require(req.isValue, "SearchRequest with that requestId doesn't exit");
+    delete requestMap[_requestId];
+
+    SEOContract memory cont = seoContractList[req.contractId];
+    require(cont.isValue, "No contract found for that contractId");
+    require(cont.status == SeoContractStatus.Processing, "Contract not in processing status");
+    delete seoContractList[req.contractId];
 
     if (_rank == 0 || _rank > cont.initialSearchRank) {
       // Search rank was worse, return funds to payer
