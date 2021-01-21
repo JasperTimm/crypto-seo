@@ -6,8 +6,8 @@ import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "@chainlink/contracts/src/v0.6/vendor/Ownable.sol";
 
 contract CryptoSEO is ChainlinkClient, Ownable {
-  uint256 constant private ORACLE_PAYMENT = 1 * LINK;
-  uint256 constant private REQUEST_EXPIRY = 1 days;
+  uint256 private ORACLE_PAYMENT = 1 * LINK;
+  uint256 private REQUEST_EXPIRY = 1 days;
 
   enum SeoCommitmentStatus { Created, Processing }
 
@@ -36,6 +36,12 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     uint256 indexed rank
   );
 
+  event PayoutCommitment(
+    uint256 commitmentId,
+    uint256 payerBal,
+    uint256 payeeBal
+  );
+
   mapping (uint256=>SEOCommitment) public seoCommitmentList;
   mapping (bytes32=>SearchRequest) public requestMap;
   mapping (address=>uint256) payoutAmt;
@@ -55,6 +61,14 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
   function setGoogleSearchJobId(string calldata _jobid) public onlyOwner {
     googleSearchJobId = _jobid;
+  }
+
+  function setRequestTimeout(uint256 _REQUEST_EXPIRY) public onlyOwner {
+    REQUEST_EXPIRY = _REQUEST_EXPIRY;
+  }
+
+  function setOraclePayment(uint256 _ORACLE_PAYMENT) public onlyOwner {
+    ORACLE_PAYMENT = _ORACLE_PAYMENT;
   }
 
   function withdrawEther() public onlyOwner {
@@ -80,11 +94,13 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(cont.isValue, "Not a valid commitment ID");
     require(cont.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
     require(now > cont.timeToExecute, "Commitment is not ready to execute yet");
-    cont.status = SeoCommitmentStatus.Processing;
-    seoCommitmentList[commitmentId] = cont;
 
     bytes32 requestId = requestGoogleSearch(cont, this.fulfillCommitment.selector);
     requestMap[requestId] = SearchRequest(true, commitmentId, now);
+
+    cont.status = SeoCommitmentStatus.Processing;
+    seoCommitmentList[commitmentId] = cont;
+
     return requestId;
   }
 
@@ -131,23 +147,28 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(cont.status == SeoCommitmentStatus.Processing, "Commitment not in processing status");
     delete seoCommitmentList[req.commitmentId];
 
-    uint256 payerBal = payoutAmt[cont.payer];
-    uint256 payeeBal = payoutAmt[cont.payee];
+    uint256 payerBal = 0;
+    uint256 payeeBal = 0;
     if (_rank == 0 || _rank > cont.initialSearchRank) {
       // Search rank was worse, return funds to payer
-      payoutAmt[cont.payer] = payerBal + cont.maxPayableEth;
-      return;
-    }
-    uint256 payForRankInc = (cont.initialSearchRank - _rank) * cont.amtPerRankEth;
-    if (payForRankInc > cont.maxPayableEth) {
-      payoutAmt[cont.payee] = payeeBal + cont.maxPayableEth;
-      return;
+      payerBal = cont.maxPayableEth;
     } else {
-      uint256 refund = cont.maxPayableEth - payForRankInc;
-      payoutAmt[cont.payer] = payerBal + refund;
-      payoutAmt[cont.payee] = payeeBal + payForRankInc;
-      return;
+      uint256 payForRankInc = (cont.initialSearchRank - _rank) * cont.amtPerRankEth;
+      if (payForRankInc > cont.maxPayableEth) {
+        payeeBal = cont.maxPayableEth;
+      } else {
+        uint256 refund = cont.maxPayableEth - payForRankInc;
+        payerBal = refund;
+        payeeBal = payForRankInc;
+      }
     }
+
+    payoutAmt[cont.payer] = payoutAmt[cont.payer] + payerBal;
+    payoutAmt[cont.payee] = payoutAmt[cont.payee] + payeeBal;
+
+    emit PayoutCommitment(req.commitmentId, payerBal, payeeBal);
+
+    return;
   }
 
   function withdrawPayout() public {
