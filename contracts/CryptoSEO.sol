@@ -9,9 +9,9 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   uint256 constant private ORACLE_PAYMENT = 1 * LINK;
   uint256 constant private REQUEST_EXPIRY = 1 days;
 
-  enum SeoContractStatus { Created, Processing }
+  enum SeoCommitmentStatus { Created, Processing }
 
-  struct SEOContract {
+  struct SEOCommitment {
     bool isValue;
     bool domainMatch;
     string site;
@@ -22,12 +22,12 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     uint256 timeToExecute; // in secs since Epoch
     address payable payee;
     address payable payer;
-    SeoContractStatus status;
+    SeoCommitmentStatus status;
   }
 
   struct SearchRequest {
     bool isValue;
-    uint256 contractId;
+    uint256 commitmentId;
     uint256 requestTime;
   }
 
@@ -36,16 +36,16 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     uint256 indexed rank
   );
 
-  mapping (uint256=>SEOContract) public seoContractList;
+  mapping (uint256=>SEOCommitment) public seoCommitmentList;
   mapping (bytes32=>SearchRequest) public requestMap;
   mapping (address=>uint256) payoutAmt;
 
-  uint256 public numSEOContracts;
+  uint256 public numSEOCommitments;
   address public oracle;
   string public googleSearchJobId;
 
   constructor() public Ownable() {
-    numSEOContracts = 0;
+    numSEOCommitments = 0;
     setPublicChainlinkToken();
   }
 
@@ -61,34 +61,34 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     msg.sender.transfer(address(this).balance);
   } 
 
-  function createSEOContract(string calldata site, string calldata searchTerm, bool domainMatch,
+  function createSEOCommitment(string calldata site, string calldata searchTerm, bool domainMatch,
     uint256 initialSearchRank, uint256 amtPerRankEth, uint256 maxPayableEth,
-    uint256 timeToExecute, address payable payee) public payable returns (uint256 contractId) {
+    uint256 timeToExecute, address payable payee) public payable returns (uint256 commitmentId) {
     require(msg.value == maxPayableEth, "Eth sent didn't match maxPayableEth");
     require(amtPerRankEth > 0, "amtPerRankEth must be greater than zero");
     require(maxPayableEth >= amtPerRankEth, "maxPayableEth must be larger than or equal to amtPerRankEth");
     require(initialSearchRank > 0, "initialSearchRank must be non-zero");
 
-    seoContractList[numSEOContracts] = SEOContract(true, domainMatch, site, searchTerm, initialSearchRank,
-      amtPerRankEth, maxPayableEth, timeToExecute, payee, msg.sender, SeoContractStatus.Created);
-    numSEOContracts++;
-    return numSEOContracts - 1;
+    seoCommitmentList[numSEOCommitments] = SEOCommitment(true, domainMatch, site, searchTerm, initialSearchRank,
+      amtPerRankEth, maxPayableEth, timeToExecute, payee, msg.sender, SeoCommitmentStatus.Created);
+    numSEOCommitments++;
+    return numSEOCommitments - 1;
   }
 
-  function executeSEOContract(uint256 contractId) public returns (bytes32) {
-    SEOContract memory cont = seoContractList[contractId];
-    require(cont.isValue, "Not a valid contract ID");
-    require(cont.status == SeoContractStatus.Created, "Contract is not in 'Created' status");
-    require(now > cont.timeToExecute, "Contract is not ready to execute yet");
-    cont.status = SeoContractStatus.Processing;
-    seoContractList[contractId] = cont;
+  function executeSEOCommitment(uint256 commitmentId) public returns (bytes32) {
+    SEOCommitment memory cont = seoCommitmentList[commitmentId];
+    require(cont.isValue, "Not a valid commitment ID");
+    require(cont.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
+    require(now > cont.timeToExecute, "Commitment is not ready to execute yet");
+    cont.status = SeoCommitmentStatus.Processing;
+    seoCommitmentList[commitmentId] = cont;
 
-    bytes32 requestId = requestGoogleSearch(cont, this.fulfillContract.selector);
-    requestMap[requestId] = SearchRequest(true, contractId, now);
+    bytes32 requestId = requestGoogleSearch(cont, this.fulfillCommitment.selector);
+    requestMap[requestId] = SearchRequest(true, commitmentId, now);
     return requestId;
   }
 
-  function requestGoogleSearch(SEOContract memory cont, bytes4 callbackSelector) private returns (bytes32 requestId)
+  function requestGoogleSearch(SEOCommitment memory cont, bytes4 callbackSelector) private returns (bytes32 requestId)
   {
     Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(googleSearchJobId), address(this), callbackSelector);
     req.add("term", cont.searchTerm);
@@ -105,15 +105,15 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(now > req.requestTime + REQUEST_EXPIRY, "Request has not yet expired");
     delete requestMap[_requestId];
 
-    SEOContract memory cont = seoContractList[req.contractId];
-    require(cont.isValue, "No contract for that requestId");
+    SEOCommitment memory cont = seoCommitmentList[req.commitmentId];
+    require(cont.isValue, "No commitment for that requestId");
 
-    cont.status = SeoContractStatus.Created;
-    seoContractList[req.contractId] = cont;
+    cont.status = SeoCommitmentStatus.Created;
+    seoCommitmentList[req.commitmentId] = cont;
     return;
   }
 
-  function fulfillContract(bytes32 _requestId, uint256 _rank)
+  function fulfillCommitment(bytes32 _requestId, uint256 _rank)
     public
     recordChainlinkFulfillment(_requestId)
   {
@@ -126,10 +126,10 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(req.isValue, "SearchRequest with that requestId doesn't exit");
     delete requestMap[_requestId];
 
-    SEOContract memory cont = seoContractList[req.contractId];
-    require(cont.isValue, "No contract found for that contractId");
-    require(cont.status == SeoContractStatus.Processing, "Contract not in processing status");
-    delete seoContractList[req.contractId];
+    SEOCommitment memory cont = seoCommitmentList[req.commitmentId];
+    require(cont.isValue, "No commitment found for that commitmentId");
+    require(cont.status == SeoCommitmentStatus.Processing, "Commitment not in processing status");
+    delete seoCommitmentList[req.commitmentId];
 
     uint256 payerBal = payoutAmt[cont.payer];
     uint256 payeeBal = payoutAmt[cont.payee];
