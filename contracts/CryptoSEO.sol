@@ -44,7 +44,8 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
   mapping (uint256=>SEOCommitment) public seoCommitmentList;
   mapping (bytes32=>SearchRequest) public requestMap;
-  mapping (address=>uint256) payoutAmt;
+  mapping (address=>uint256) public payoutAmt;
+  mapping (address=>uint256) public linkAmt;
 
   uint256 public numSEOCommitments;
   address public oracle;
@@ -53,6 +54,25 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   constructor() public Ownable() {
     numSEOCommitments = 0;
     setPublicChainlinkToken();
+  }
+
+  function onTokenTransfer(
+    address _sender,
+    uint256 _amount,
+    bytes memory _data
+  )
+    public
+    onlyLINK 
+  {
+    linkAmt[_sender] = linkAmt[_sender] + _amount;
+  }
+
+  /**
+   * @dev Reverts if not sent from the LINK token
+   */
+  modifier onlyLINK() {
+    require(msg.sender == getChainlinkToken(), "Must use LINK token");
+    _;
   }
 
   function setOracle(address _oracle) public onlyOwner {
@@ -94,9 +114,11 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(cont.isValue, "Not a valid commitment ID");
     require(cont.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
     require(now > cont.timeToExecute, "Commitment is not ready to execute yet");
+    require(linkAmt[msg.sender] > ORACLE_PAYMENT, "Sender does not have enough LINK in contract");
 
     bytes32 requestId = requestGoogleSearch(cont, this.fulfillCommitment.selector);
     requestMap[requestId] = SearchRequest(true, commitmentId, now);
+    linkAmt[msg.sender] = linkAmt[msg.sender] - ORACLE_PAYMENT;
 
     cont.status = SeoCommitmentStatus.Processing;
     seoCommitmentList[commitmentId] = cont;
