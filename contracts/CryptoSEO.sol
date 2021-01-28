@@ -8,7 +8,8 @@ import "@chainlink/contracts/src/v0.6/vendor/Ownable.sol";
 contract CryptoSEO is ChainlinkClient, Ownable {
   uint256 private ORACLE_PAYMENT = 1 * LINK;
   uint256 private REQUEST_EXPIRY = 1 days;
-
+  LinkTokenInterface private link;
+  
   enum SeoCommitmentStatus { Created, Processing }
 
   struct SEOCommitment {
@@ -45,7 +46,6 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   mapping (uint256=>SEOCommitment) public seoCommitmentList;
   mapping (bytes32=>SearchRequest) public requestMap;
   mapping (address=>uint256) public payoutAmt;
-  mapping (address=>uint256) public linkAmt;
 
   uint256 public numSEOCommitments;
   address public oracle;
@@ -54,26 +54,11 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   constructor() public Ownable() {
     numSEOCommitments = 0;
     setPublicChainlinkToken();
+    link = LinkTokenInterface(chainlinkTokenAddress());
   }
 
-  function onTokenTransfer(
-    address _sender,
-    uint256 _amount,
-    bytes memory _data
-  )
-    public
-    onlyLINK 
-  {
-    linkAmt[_sender] = linkAmt[_sender] + _amount;
-  }
-
-  /**
-   * @dev Reverts if not sent from the LINK token
-   */
-  modifier onlyLINK() {
-    require(msg.sender == getChainlinkToken(), "Must use LINK token");
-    _;
-  }
+  //Ensure we can receive Eth transfers for testing
+  receive() external payable {}
 
   function setOracle(address _oracle) public onlyOwner {
     oracle = _oracle;
@@ -93,6 +78,22 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
   function withdrawEther() public onlyOwner {
     msg.sender.transfer(address(this).balance);
+  }
+
+  function withdrawLink() public onlyOwner {
+    require(link.transfer(msg.sender, link.balanceOf(address(this))), "Unable to transfer");
+  }
+
+  function cancelRequest(
+    bytes32 _requestId,
+    uint256 _payment,
+    bytes4 _callbackFunctionId,
+    uint256 _expiration
+  )
+    public
+    onlyOwner
+  {
+    cancelChainlinkRequest(_requestId, _payment, _callbackFunctionId, _expiration);
   } 
 
   function createSEOCommitment(string calldata site, string calldata searchTerm, bool domainMatch,
@@ -102,6 +103,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(amtPerRankEth > 0, "amtPerRankEth must be greater than zero");
     require(maxPayableEth >= amtPerRankEth, "maxPayableEth must be larger than or equal to amtPerRankEth");
     require(initialSearchRank > 0, "initialSearchRank must be non-zero");
+    require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
 
     seoCommitmentList[numSEOCommitments] = SEOCommitment(true, domainMatch, site, searchTerm, initialSearchRank,
       amtPerRankEth, maxPayableEth, timeToExecute, payee, msg.sender, SeoCommitmentStatus.Created);
@@ -114,11 +116,9 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(cont.isValue, "Not a valid commitment ID");
     require(cont.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
     require(now > cont.timeToExecute, "Commitment is not ready to execute yet");
-    require(linkAmt[msg.sender] > ORACLE_PAYMENT, "Sender does not have enough LINK in contract");
 
     bytes32 requestId = requestGoogleSearch(cont, this.fulfillCommitment.selector);
     requestMap[requestId] = SearchRequest(true, commitmentId, now);
-    linkAmt[msg.sender] = linkAmt[msg.sender] - ORACLE_PAYMENT;
 
     cont.status = SeoCommitmentStatus.Processing;
     seoCommitmentList[commitmentId] = cont;
@@ -198,27 +198,6 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     uint256 bal = payoutAmt[msg.sender];
     payoutAmt[msg.sender] = 0;
     msg.sender.transfer(bal);
-  }
-
-  function getChainlinkToken() public view returns (address) {
-    return chainlinkTokenAddress();
-  }
-
-  function withdrawLink() public onlyOwner {
-    LinkTokenInterface link = LinkTokenInterface(chainlinkTokenAddress());
-    require(link.transfer(msg.sender, link.balanceOf(address(this))), "Unable to transfer");
-  }
-
-  function cancelRequest(
-    bytes32 _requestId,
-    uint256 _payment,
-    bytes4 _callbackFunctionId,
-    uint256 _expiration
-  )
-    public
-    onlyOwner
-  {
-    cancelChainlinkRequest(_requestId, _payment, _callbackFunctionId, _expiration);
   }
 
   function stringToBytes32(string memory source) private pure returns (bytes32 result) {
