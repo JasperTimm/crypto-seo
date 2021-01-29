@@ -32,13 +32,25 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     uint256 requestTime;
   }
 
+  event SEOCommitmentCreated(
+    uint256 indexed commitmentId,
+    string site,
+    string searchTerm
+  );
+
+  event RequestGoogleSearchSent(
+    uint256 indexed commitmentId,
+    bytes32 indexed requestId,
+    uint256 timeToExecute
+  );
+
   event RequestGoogleSearchFulfilled(
     bytes32 indexed requestId,
-    uint256 indexed rank
+    uint256 rank
   );
 
   event PayoutCommitment(
-    uint256 commitmentId,
+    uint256 indexed commitmentId,
     uint256 payerBal,
     uint256 payeeBal
   );
@@ -98,40 +110,49 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
   function createSEOCommitment(string calldata site, string calldata searchTerm, bool domainMatch,
     uint256 initialSearchRank, uint256 amtPerRankEth, uint256 maxPayableEth,
-    uint256 timeToExecute, address payable payee) public payable returns (uint256 commitmentId) {
+    uint256 timeToExecute, address payable payee) public payable returns (uint256) {
     require(msg.value == maxPayableEth, "Eth sent didn't match maxPayableEth");
     require(amtPerRankEth > 0, "amtPerRankEth must be greater than zero");
     require(maxPayableEth >= amtPerRankEth, "maxPayableEth must be larger than or equal to amtPerRankEth");
     require(initialSearchRank > 0, "initialSearchRank must be non-zero");
     require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
 
-    seoCommitmentList[numSEOCommitments] = SEOCommitment(true, domainMatch, site, searchTerm, initialSearchRank,
+    SEOCommitment memory comt = SEOCommitment(true, domainMatch, site, searchTerm, initialSearchRank,
       amtPerRankEth, maxPayableEth, timeToExecute, payee, msg.sender, SeoCommitmentStatus.Created);
+    uint commitmentId = numSEOCommitments;
+    seoCommitmentList[commitmentId] = comt;
     numSEOCommitments++;
-    return numSEOCommitments - 1;
+
+    emit SEOCommitmentCreated(commitmentId, site, searchTerm);
+
+    executeSEOCommitment(commitmentId);
+
+    return commitmentId;
   }
 
   function executeSEOCommitment(uint256 commitmentId) public returns (bytes32) {
-    SEOCommitment memory cont = seoCommitmentList[commitmentId];
-    require(cont.isValue, "Not a valid commitment ID");
-    require(cont.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
-    require(now > cont.timeToExecute, "Commitment is not ready to execute yet");
+    SEOCommitment memory comt = seoCommitmentList[commitmentId];
+    require(comt.isValue, "Not a valid commitment ID");
+    require(comt.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
 
-    bytes32 requestId = requestGoogleSearch(cont, this.fulfillCommitment.selector);
+    bytes32 requestId = requestGoogleSearch(comt, this.fulfillCommitment.selector);
     requestMap[requestId] = SearchRequest(true, commitmentId, now);
 
-    cont.status = SeoCommitmentStatus.Processing;
-    seoCommitmentList[commitmentId] = cont;
+    comt.status = SeoCommitmentStatus.Processing;
+    seoCommitmentList[commitmentId] = comt;
+
+    emit RequestGoogleSearchSent(commitmentId, requestId, comt.timeToExecute);
 
     return requestId;
   }
 
-  function requestGoogleSearch(SEOCommitment memory cont, bytes4 callbackSelector) private returns (bytes32 requestId)
+  function requestGoogleSearch(SEOCommitment memory comt, bytes4 callbackSelector) private returns (bytes32 requestId)
   {
     Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(googleSearchJobId), address(this), callbackSelector);
-    req.add("term", cont.searchTerm);
-    req.add("site", cont.site);
-    if (cont.domainMatch) {
+    req.add("term", comt.searchTerm);
+    req.add("site", comt.site);
+    req.addUint("until", comt.timeToExecute);
+    if (comt.domainMatch) {
       req.add("domainMatch", "true");
     }
     return sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
@@ -143,11 +164,11 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(now > req.requestTime + REQUEST_EXPIRY, "Request has not yet expired");
     delete requestMap[_requestId];
 
-    SEOCommitment memory cont = seoCommitmentList[req.commitmentId];
-    require(cont.isValue, "No commitment for that requestId");
+    SEOCommitment memory comt = seoCommitmentList[req.commitmentId];
+    require(comt.isValue, "No commitment for that requestId");
 
-    cont.status = SeoCommitmentStatus.Created;
-    seoCommitmentList[req.commitmentId] = cont;
+    comt.status = SeoCommitmentStatus.Created;
+    seoCommitmentList[req.commitmentId] = comt;
     return;
   }
 
