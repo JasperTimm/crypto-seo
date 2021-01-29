@@ -63,10 +63,12 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   address public oracle;
   string public googleSearchJobId;
 
-  constructor() public Ownable() {
+  constructor(address _oracle, string memory _jobId) public Ownable() {
     numSEOCommitments = 0;
     setPublicChainlinkToken();
     link = LinkTokenInterface(chainlinkTokenAddress());
+    setOracle(_oracle);
+    setGoogleSearchJobId(_jobId);
   }
 
   //Ensure we can receive Eth transfers for testing
@@ -76,7 +78,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     oracle = _oracle;
   }
 
-  function setGoogleSearchJobId(string calldata _jobid) public onlyOwner {
+  function setGoogleSearchJobId(string memory _jobid) public onlyOwner {
     googleSearchJobId = _jobid;
   }
 
