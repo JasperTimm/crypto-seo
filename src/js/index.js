@@ -6,6 +6,14 @@ import Button from 'react-bootstrap/Button'
 import { Container, Navbar, Form, Card } from 'react-bootstrap'
 const request = require('request')
 const CryptoSEO = require('../../build/contracts/CryptoSEO')
+const LinkToken = require('../../build/contracts/LinkTokenInterface')
+const LinkAddress = {
+  "networks" : {
+    "4": "0x01BE23585060835E02B77ef475b0Cc51aA1e0709"
+  }
+}
+const LINK_TOKEN_MULTIPLIER = 10**18
+const ORACLE_PAYMENT = String(1 * LINK_TOKEN_MULTIPLIER)
 
 class App extends React.Component {
    constructor(props){
@@ -37,6 +45,7 @@ class App extends React.Component {
       this.connectEthereum = this.connectEthereum.bind(this)
       this.refreshSearchRank = this.refreshSearchRank.bind(this)
       this.handleChange = this.handleChange.bind(this)
+      this.payLINK = this.payLINK.bind(this)
       this.createContract = this.createContract.bind(this)
       this.handleChainChanged = this.handleChainChanged.bind(this)
       this.handleAccountsChanged = this.handleAccountsChanged.bind(this)
@@ -47,6 +56,7 @@ class App extends React.Component {
       ethereum
         .request({ method: 'eth_requestAccounts' })
         .then(this.handleAccountsChanged)
+        .then(this.handleChainChanged)
         .catch((err) => {
           if (err.code === 4001) {
             console.log('Please connect to Metamask.')
@@ -71,6 +81,7 @@ class App extends React.Component {
           return
       }
       this.state.CryptoSEOContract = new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address)
+      this.state.LinkTokenContract = new this.web3.eth.Contract(LinkToken.abi, LinkAddress.networks[networkId])
     }
 
     refreshSearchRank() {
@@ -86,6 +97,19 @@ class App extends React.Component {
     handleChange(evt) {
       const value = evt.target.value
       this.setState({...this.state, [evt.target.name]: value})
+    }
+
+    payLINK() {
+      console.log("About to call approve on LINK token...")
+      this.state.LinkTokenContract.methods.approve(this.state.CryptoSEOContract._address, ORACLE_PAYMENT).send( 
+        {from: this.state.currentAccount},
+        (err, result) => {
+          if (err) {
+            console.error(err)
+          } else {
+            console.log(result)
+          }
+        })
     }
 
     createContract() {
@@ -113,10 +137,10 @@ class App extends React.Component {
         payee: this.state.payee
       }
 
-      console.log("About to call createSEOContract with...")
+      console.log("About to call createSEOCommitment with...")
       console.log(callObj)
 
-      this.state.CryptoSEOContract.methods.createSEOContract(callObj.site, callObj.searchTerm, callObj.domainMatch,
+      this.state.CryptoSEOContract.methods.createSEOCommitment(callObj.site, callObj.searchTerm, callObj.domainMatch,
         callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.expiryTime, callObj.payee).send( 
         {value: callObj.maxAmtEth, from: this.state.currentAccount},
         (err, result) => {
@@ -189,6 +213,7 @@ class App extends React.Component {
                             </Form.Control>
                         </Form.Group>                                                
                         <Form.Group>
+                            <Button onClick={this.payLINK} variant="success">Pay LINK</Button>
                             <Button onClick={this.createContract} variant="success">Create contract</Button>
                         </Form.Group>                        
                     </Form>
