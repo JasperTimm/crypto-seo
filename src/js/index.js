@@ -14,6 +14,9 @@ const LinkAddress = {
 }
 const LINK_TOKEN_MULTIPLIER = 10**18
 const ORACLE_PAYMENT = String(1 * LINK_TOKEN_MULTIPLIER)
+const networkNames = {
+  "4": "Rinkeby"
+}
 
 class App extends React.Component {
    constructor(props){
@@ -21,7 +24,8 @@ class App extends React.Component {
       this.state = {
         searchTerm: '',
         siteName: '',
-        durationUnits: 'Minutes'
+        durationUnits: 'Minutes',
+        accounts: []
       }
 
       this.setupListeners()
@@ -31,32 +35,35 @@ class App extends React.Component {
         this.web3 = new Web3(ethereum)
         ethereum.on('accountsChanged', this.handleAccountsChanged)
         ethereum.on('chainChanged', this.handleChainChanged)
-        ethereum.autoRefreshOnNetworkChange = false
+        ethereum.on('connect', this.handleConnect)
+        ethereum.on('disconnect', this.handleDisconnect)
+        // ethereum.autoRefreshOnNetworkChange = false
       } else {
         console.error("No web3 detected.")
         return
       }
    }
 
-    componentDidMount() {      
+    componentDidMount() {  
     }
 
     setupListeners() {
-      this.connectEthereum = this.connectEthereum.bind(this)
+      this.connectAccount = this.connectAccount.bind(this)
       this.refreshSearchRank = this.refreshSearchRank.bind(this)
       this.handleChange = this.handleChange.bind(this)
       this.payLINK = this.payLINK.bind(this)
       this.createContract = this.createContract.bind(this)
       this.handleChainChanged = this.handleChainChanged.bind(this)
       this.handleAccountsChanged = this.handleAccountsChanged.bind(this)
+      this.handleConnect = this.handleConnect.bind(this)
+      this.handleDisconnect = this.handleDisconnect.bind(this)
     }
 
-    connectEthereum() {
+    connectAccount() {
       console.log("Connect clicked")
       ethereum
         .request({ method: 'eth_requestAccounts' })
         .then(this.handleAccountsChanged)
-        .then(this.handleChainChanged)
         .catch((err) => {
           if (err.code === 4001) {
             console.log('Please connect to Metamask.')
@@ -66,22 +73,45 @@ class App extends React.Component {
         })
     }
 
-    handleAccountsChanged(accounts) {
-      console.log("Accounts changed")
-      this.state.currentAccount = accounts[0]
+    handleConnect(connectInfo) {
+      console.log("Connected to: " + connectInfo.chainId)
+      this.handleChainChanged(connectInfo.chainId)
+      ethereum
+        .request({ method: 'eth_accounts' })
+        .then(this.handleAccountsChanged)
+        .catch((err) => {
+          console.error(err)
+        })
     }
 
-    handleChainChanged() {
-      console.log("Chain changed to: " + ethereum.chainId)
+    handleDisconnect(error) {
+      console.error(error)
+    }
+
+    handleAccountsChanged(accounts) {
+      console.log("Accounts changed")
+      console.log(accounts)
+      this.setState({
+        accounts: accounts,
+        currentAccount: accounts.length == 0 ? null : accounts[0]
+      })
+    }
+
+    handleChainChanged(chainId) {
+      console.log("Chain changed to: " + chainId)
       
-      const networkId = String(parseInt(ethereum.chainId))
+      const networkId = String(parseInt(chainId))
       console.log("Network ID is: " + networkId)
       if (CryptoSEO.networks[networkId] == undefined) {
           console.error("CryptoSEO contract not deployed to this network")
           return
       }
-      this.state.CryptoSEOContract = new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address)
-      this.state.LinkTokenContract = new this.web3.eth.Contract(LinkToken.abi, LinkAddress.networks[networkId])
+
+      this.setState({
+        CryptoSEOContract: new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address),
+        LinkTokenContract: new this.web3.eth.Contract(LinkToken.abi, LinkAddress.networks[networkId]),
+        networkName: networkNames[networkId]
+      })
     }
 
     refreshSearchRank() {
@@ -157,11 +187,28 @@ class App extends React.Component {
         <Container fluid>
             <Navbar bg="light" variant="light">
                 <Navbar.Brand>Crypto SEO</Navbar.Brand>
-                <Form inline>
-                    <Button onClick={this.connectEthereum} variant="outline-info">Connect</Button>
-                </Form>
             </Navbar>
-            
+
+            <Card>
+                <Card.Header>Web3 Connection</Card.Header>
+                <Card.Body>
+                    <Form>
+                        <Form.Group controlId="formNetwork">
+                          <Form.Label>Network</Form.Label>
+                          <Form.Control value={this.state.networkName} readOnly  defaultValue="Not connected" />
+                        </Form.Group>
+                        <Form.Group controlId="formAccount">
+                          <Form.Label>Account</Form.Label>
+                          <br/>
+                          { this.state.currentAccount
+                                ?  <Form.Control value={this.state.currentAccount} readOnly />
+                                : <Button onClick={this.connectAccount} variant="outline-info">Connect</Button>
+                          }                          
+                        </Form.Group>                        
+                    </Form>
+                </Card.Body>
+            </Card>
+
             <Card>
                 <Card.Header>Search details</Card.Header>
                 <Card.Body>
