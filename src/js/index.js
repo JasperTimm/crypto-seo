@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { Component, useState } from 'react'
 import ReactDOM from 'react-dom'
 import Web3 from 'web3'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Button from 'react-bootstrap/Button'
-import { Container, Navbar, Form, Card } from 'react-bootstrap'
+import { Container, Navbar, Form, Card, Modal } from 'react-bootstrap'
 const request = require('request')
 const CryptoSEO = require('../../build/contracts/CryptoSEO')
 const LinkToken = require('../../build/contracts/LinkTokenInterface')
@@ -13,20 +13,51 @@ const LinkAddress = {
   }
 }
 const LINK_TOKEN_MULTIPLIER = 10**18
-const ORACLE_PAYMENT = String(1 * LINK_TOKEN_MULTIPLIER)
+const ORACLE_PAYMENT = 1 * LINK_TOKEN_MULTIPLIER
 const networkNames = {
   "4": "Rinkeby"
 }
 
-class App extends React.Component {
+function ModalDialog(props) {
+  // const [show, setShow] = useState(false)
+  // const handleClose = () => props.show = false
+
+  // if (props.show != show) setShow(props.show)
+
+  return (
+    <>
+      <Modal show={props.modal.show} onHide={props.handleClose}>
+        <Modal.Header closeButton>
+          <Modal.Title>{props.modal.title}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>{props.modal.message}</Modal.Body>
+        <Modal.Footer>
+          {/* <Button variant="secondary" onClick={props.handleClose}>
+            Close
+          </Button> */}
+          <Button variant="primary" onClick={props.handleClose}>
+            OK
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </>
+  );
+}
+
+class App extends Component {
    constructor(props){
       super(props)
       this.state = {
         searchTerm: '',
         siteName: '',
         durationUnits: 'Minutes',
-        accounts: []
+        accounts: [],
+        payLinkEnabled: true,
+        createEnabled: false,
+        modal: {show: false}
       }
+
+      this.handleModalClose = () => this.setState({modal: {show: false}})
 
       this.setupListeners()
 
@@ -91,10 +122,19 @@ class App extends React.Component {
     handleAccountsChanged(accounts) {
       console.log("Accounts changed")
       console.log(accounts)
+
       this.setState({
         accounts: accounts,
         currentAccount: accounts.length == 0 ? null : accounts[0]
       })
+
+      if (this.state.currentAccount && this.state.LinkTokenContract) {
+        this.state.LinkTokenContract.methods.balanceOf(this.state.currentAccount).call(
+          {from: this.state.currentAccount})
+          .then(function(receipt) {
+            console.log(receipt)
+          })
+      }
     }
 
     handleChainChanged(chainId) {
@@ -104,6 +144,11 @@ class App extends React.Component {
       console.log("Network ID is: " + networkId)
       if (CryptoSEO.networks[networkId] == undefined) {
           console.error("CryptoSEO contract not deployed to this network")
+          this.setState({
+            CryptoSEOContract: null,
+            LinkTokenContract: null,
+            networkName: "CryptoSEO is not deployed here, please change to Rinkeby"
+          })          
           return
       }
 
@@ -129,17 +174,56 @@ class App extends React.Component {
       this.setState({...this.state, [evt.target.name]: value})
     }
 
-    payLINK() {
-      console.log("About to call approve on LINK token...")
-      this.state.LinkTokenContract.methods.approve(this.state.CryptoSEOContract._address, ORACLE_PAYMENT).send( 
-        {from: this.state.currentAccount},
-        (err, result) => {
-          if (err) {
-            console.error(err)
-          } else {
-            console.log(result)
-          }
+    showModal = (title, message) => this.setState({
+      modal: {
+        show: true,
+        title: title,
+        message: message
+      }
+    })
+
+    async payLINK() {
+      if (! this.state.currentAccount) {
+        this.showModal("Invalid account", "No account is connected via Web3 to the site")
+        return
+      }
+
+      let linkBal = await this.state.LinkTokenContract.methods.balanceOf(this.state.currentAccount).call(
+        {from: this.state.currentAccount})
+
+      if (linkBal < ORACLE_PAYMENT) {
+        this.showModal("Insufficient LINK", "This account has insufficient LINK to create this contract")
+        return
+      }
+
+      let onSuccess = (receipt) => {
+        console.log("LINK approved: " + receipt)
+        this.setState({
+          payLinkEnabled: false,
+          createEnabled: true
+        }) 
+      }
+
+      let onWaiting = (txHash) => {
+        console.log("Awaiting confirmation: " + txHash)
+        this.setState({
+          payLinkEnabled: false
         })
+      }
+
+      let onError = (error) => {
+        console.error(error)
+        this.setState({
+          payLinkEnabled: true
+        })
+      }
+
+      console.log("About to call approve on LINK token...")
+      this.state.LinkTokenContract.methods.approve(this.state.CryptoSEOContract._address, String(ORACLE_PAYMENT)).send( 
+        {from: this.state.currentAccount})
+        .once('transactionHash', onWaiting)
+        .on('error', onError)
+        .then(onSuccess)
     }
 
     createContract() {
@@ -189,6 +273,8 @@ class App extends React.Component {
                 <Navbar.Brand>Crypto SEO</Navbar.Brand>
             </Navbar>
 
+            <ModalDialog modal={this.state.modal} handleClose={this.handleModalClose} />
+
             <Card>
                 <Card.Header>Web3 Connection</Card.Header>
                 <Card.Body>
@@ -209,7 +295,11 @@ class App extends React.Component {
                 </Card.Body>
             </Card>
 
-            <Card>
+            {!this.state.CryptoSEOContract
+              ? <></>
+              : 
+              <>
+              <Card>
                 <Card.Header>Search details</Card.Header>
                 <Card.Body>
                     <Form>
@@ -260,12 +350,16 @@ class App extends React.Component {
                             </Form.Control>
                         </Form.Group>                                                
                         <Form.Group>
-                            <Button onClick={this.payLINK} variant="success">Pay LINK</Button>
-                            <Button onClick={this.createContract} variant="success">Create contract</Button>
+                            <Button onClick={async () => await this.payLINK()} variant="success" disabled={!this.state.payLinkEnabled}>Pay LINK</Button>
+                            <br/>
+                            <br/>
+                            <Button onClick={this.createContract} variant="success" disabled={!this.state.createEnabled}>Create contract</Button>
                         </Form.Group>                        
                     </Form>
                 </Card.Body>
-            </Card>            
+            </Card>
+            </>
+        }          
         </Container>
         )
     }
