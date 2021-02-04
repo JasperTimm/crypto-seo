@@ -1,10 +1,9 @@
-import React, { Component, useState } from 'react'
+import React, { Component } from 'react'
 import ReactDOM from 'react-dom'
 import Web3 from 'web3'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Button from 'react-bootstrap/Button'
-import { Container, Navbar, Form, Card, Modal } from 'react-bootstrap'
-const request = require('request')
+import { Container, Nav, Navbar, Form, Card, Modal } from 'react-bootstrap'
 const CryptoSEO = require('../../build/contracts/CryptoSEO')
 const LinkToken = require('../../build/contracts/LinkTokenInterface')
 const LinkAddress = {
@@ -19,11 +18,6 @@ const networkNames = {
 }
 
 function ModalDialog(props) {
-  // const [show, setShow] = useState(false)
-  // const handleClose = () => props.show = false
-
-  // if (props.show != show) setShow(props.show)
-
   return (
     <>
       <Modal show={props.modal.show} onHide={props.handleClose}>
@@ -44,53 +38,220 @@ function ModalDialog(props) {
   );
 }
 
+class Home extends Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+
+    }
+  }
+
+  render(){
+    return (
+      <Container fluid>
+      </Container>
+    )
+  }
+}
+
 class App extends Component {
+  constructor(props){
+     super(props)
+     this.state = {
+       accounts: [],
+       currentAccount: null
+     }
+
+     if (ethereum) {
+      console.log("Using web3 detected from external source like Metamask")
+      this.web3 = new Web3(ethereum)
+      ethereum.on('accountsChanged', this.handleAccountsChanged)
+      ethereum.on('chainChanged', this.handleChainChanged)
+      ethereum.on('connect', this.handleConnect)
+      ethereum.on('disconnect', this.handleDisconnect)
+      // ethereum.autoRefreshOnNetworkChange = false
+    } else {
+      console.error("No web3 detected.")
+      return
+    }
+  }
+
+  componentDidMount = () => {  
+  }
+
+  handleConnect = (connectInfo) => {
+    console.log("Connected to: " + connectInfo.chainId)
+    this.handleChainChanged(connectInfo.chainId)
+    ethereum
+      .request({ method: 'eth_accounts' })
+      .then(this.handleAccountsChanged)
+      .catch((err) => {
+        console.error(err)
+      })
+  }
+
+  handleDisconnect = (error) => {
+    console.error(error)
+  }
+
+  handleAccountsChanged = (accounts) => {
+    console.log("Accounts changed")
+    console.log(accounts)
+
+    this.setState({
+      accounts: accounts,
+      currentAccount: accounts.length == 0 ? null : accounts[0]
+    })
+
+    if (this.state.currentAccount && this.state.LinkTokenContract) {
+      this.state.LinkTokenContract.methods.balanceOf(this.state.currentAccount).call(
+        {from: this.state.currentAccount})
+        .then(function(receipt) {
+          console.log(receipt)
+        })
+    }
+  }
+
+  handleChainChanged = (chainId) => {
+    console.log("Chain changed to: " + chainId)
+    
+    const networkId = String(parseInt(chainId))
+    console.log("Network ID is: " + networkId)
+    if (CryptoSEO.networks[networkId] == undefined) {
+        console.error("CryptoSEO contract not deployed to this network")
+        this.setState({
+          CryptoSEOContract: null,
+          LinkTokenContract: null,
+          networkName: "CryptoSEO is not deployed here, please change to Rinkeby"
+        })          
+        return
+    }
+
+    this.setState({
+      CryptoSEOContract: new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address),
+      LinkTokenContract: new this.web3.eth.Contract(LinkToken.abi, LinkAddress.networks[networkId]),
+      networkName: networkNames[networkId]
+    })
+  }
+
+  selectPage = (eventKey) => {
+    switch(eventKey) {
+      case "create":
+        this.setState({
+          page: <Create appState={this.state} web3={this.web3}/>
+        })
+        return
+      case "view":
+        this.setState({
+          page: <View appState={this.state} web3={this.web3}/>
+        })
+        return
+      default:
+        this.setState({
+          page: <Home />
+        })
+        return
+    }
+  }
+
+  render(){
+    return (
+    <Container fluid>
+        <Navbar bg="light" variant="light">
+            <Navbar.Brand>Crypto SEO</Navbar.Brand>
+            <Nav fill variant="tabs">
+              <Nav.Item>
+                <Nav.Link eventKey="create" onSelect={this.selectPage}>Create</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="view" onSelect={this.selectPage}>View</Nav.Link>
+              </Nav.Item>
+            </Nav>
+        </Navbar>
+        {this.state.page}
+    </Container>
+    )
+  }
+}
+
+class View extends Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      appState: props.appState,
+      seoCommitment: {foo: "bar"}
+    }
+
+
+  }
+
+  componentDidMount() {
+    this.state.appState.CryptoSEOContract.methods.seoCommitmentList(0).call(
+      {from: this.state.appState.currentAccount})
+      .then((resp) => {
+        let commitment = {}
+        Object.keys(resp)
+          .filter((key) => !parseInt(key) && key != "isValue" && key != "0")
+          .forEach((key) => commitment[key] = resp[key])
+
+        console.log(commitment)
+
+        this.setState({
+          seoCommitment: commitment
+        })
+      })  
+  }
+
+  displaySEOCommitment = () => {
+    return (
+      Object.keys(this.state.seoCommitment).map((field) => {
+        return (
+        <Form.Group>
+          <Form.Label>{field}</Form.Label>
+          <Form.Control value={this.state.seoCommitment[field]} readOnly />
+        </Form.Group>
+        )
+      })
+      )
+  }
+
+  render(){
+    return (
+      <Container fluid>
+          <Card>
+              <Card.Header>SEO Commitment</Card.Header>
+              <Card.Body>
+                  <Form>
+                    {this.displaySEOCommitment()}                       
+                  </Form>
+              </Card.Body>
+          </Card>
+      </Container>
+    )
+  }
+}
+
+class Create extends Component {
    constructor(props){
       super(props)
       this.state = {
+        appState: props.appState,
         searchTerm: '',
         siteName: '',
         durationUnits: 'Minutes',
-        accounts: [],
         payLinkEnabled: true,
         createEnabled: false,
         modal: {show: false}
       }
 
+      this.web3 = props.web3
       this.handleModalClose = () => this.setState({modal: {show: false}})
-
-      this.setupListeners()
-
-      if (ethereum) {
-        console.log("Using web3 detected from external source like Metamask")
-        this.web3 = new Web3(ethereum)
-        ethereum.on('accountsChanged', this.handleAccountsChanged)
-        ethereum.on('chainChanged', this.handleChainChanged)
-        ethereum.on('connect', this.handleConnect)
-        ethereum.on('disconnect', this.handleDisconnect)
-        // ethereum.autoRefreshOnNetworkChange = false
-      } else {
-        console.error("No web3 detected.")
-        return
-      }
    }
 
     componentDidMount() {  
     }
 
-    setupListeners() {
-      this.connectAccount = this.connectAccount.bind(this)
-      this.refreshSearchRank = this.refreshSearchRank.bind(this)
-      this.handleChange = this.handleChange.bind(this)
-      this.payLINK = this.payLINK.bind(this)
-      this.createContract = this.createContract.bind(this)
-      this.handleChainChanged = this.handleChainChanged.bind(this)
-      this.handleAccountsChanged = this.handleAccountsChanged.bind(this)
-      this.handleConnect = this.handleConnect.bind(this)
-      this.handleDisconnect = this.handleDisconnect.bind(this)
-    }
-
-    connectAccount() {
+    connectAccount = () => {
       console.log("Connect clicked")
       ethereum
         .request({ method: 'eth_requestAccounts' })
@@ -104,62 +265,7 @@ class App extends Component {
         })
     }
 
-    handleConnect(connectInfo) {
-      console.log("Connected to: " + connectInfo.chainId)
-      this.handleChainChanged(connectInfo.chainId)
-      ethereum
-        .request({ method: 'eth_accounts' })
-        .then(this.handleAccountsChanged)
-        .catch((err) => {
-          console.error(err)
-        })
-    }
-
-    handleDisconnect(error) {
-      console.error(error)
-    }
-
-    handleAccountsChanged(accounts) {
-      console.log("Accounts changed")
-      console.log(accounts)
-
-      this.setState({
-        accounts: accounts,
-        currentAccount: accounts.length == 0 ? null : accounts[0]
-      })
-
-      if (this.state.currentAccount && this.state.LinkTokenContract) {
-        this.state.LinkTokenContract.methods.balanceOf(this.state.currentAccount).call(
-          {from: this.state.currentAccount})
-          .then(function(receipt) {
-            console.log(receipt)
-          })
-      }
-    }
-
-    handleChainChanged(chainId) {
-      console.log("Chain changed to: " + chainId)
-      
-      const networkId = String(parseInt(chainId))
-      console.log("Network ID is: " + networkId)
-      if (CryptoSEO.networks[networkId] == undefined) {
-          console.error("CryptoSEO contract not deployed to this network")
-          this.setState({
-            CryptoSEOContract: null,
-            LinkTokenContract: null,
-            networkName: "CryptoSEO is not deployed here, please change to Rinkeby"
-          })          
-          return
-      }
-
-      this.setState({
-        CryptoSEOContract: new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address),
-        LinkTokenContract: new this.web3.eth.Contract(LinkToken.abi, LinkAddress.networks[networkId]),
-        networkName: networkNames[networkId]
-      })
-    }
-
-    refreshSearchRank() {
+    refreshSearchRank = () => {
         console.log("Refresh clicked")
         console.log(this.state.searchTerm)
         // request('http://www.google.com', function (err, res, body) {
@@ -169,7 +275,7 @@ class App extends Component {
         // })
     }
 
-    handleChange(evt) {
+    handleChange = (evt) => {
       const value = evt.target.value
       this.setState({...this.state, [evt.target.name]: value})
     }
@@ -182,14 +288,14 @@ class App extends Component {
       }
     })
 
-    async payLINK() {
-      if (! this.state.currentAccount) {
+    payLINK =  async () => {
+      if (! this.state.appState.currentAccount) {
         this.showModal("Invalid account", "No account is connected via Web3 to the site")
         return
       }
 
-      let linkBal = await this.state.LinkTokenContract.methods.balanceOf(this.state.currentAccount).call(
-        {from: this.state.currentAccount})
+      let linkBal = await this.state.appState.LinkTokenContract.methods.balanceOf(this.state.appState.currentAccount).call(
+        {from: this.state.appState.currentAccount})
 
       if (linkBal < ORACLE_PAYMENT) {
         this.showModal("Insufficient LINK", "This account has insufficient LINK to create this contract")
@@ -219,14 +325,14 @@ class App extends Component {
       }
 
       console.log("About to call approve on LINK token...")
-      this.state.LinkTokenContract.methods.approve(this.state.CryptoSEOContract._address, String(ORACLE_PAYMENT)).send( 
-        {from: this.state.currentAccount})
+      this.state.appState.LinkTokenContract.methods.approve(this.state.appState.CryptoSEOContract._address, String(ORACLE_PAYMENT)).send( 
+        {from: this.state.appState.currentAccount})
         .once('transactionHash', onWaiting)
         .on('error', onError)
         .then(onSuccess)
     }
 
-    createContract() {
+    createContract = () => {
       let timeNow = Math.floor(Date.now() / 1000)
       let expiryTime = 0
       if (this.state.durationUnits == "Minutes") {
@@ -254,9 +360,9 @@ class App extends Component {
       console.log("About to call createSEOCommitment with...")
       console.log(callObj)
 
-      this.state.CryptoSEOContract.methods.createSEOCommitment(callObj.site, callObj.searchTerm, callObj.domainMatch,
+      this.state.appState.CryptoSEOContract.methods.createSEOCommitment(callObj.site, callObj.searchTerm, callObj.domainMatch,
         callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.expiryTime, callObj.payee).send( 
-        {value: callObj.maxAmtEth, from: this.state.currentAccount},
+        {value: callObj.maxAmtEth, from: this.state.appState.currentAccount},
         (err, result) => {
           if (err) {
             console.error(err)
@@ -269,10 +375,6 @@ class App extends Component {
     render(){
         return (
         <Container fluid>
-            <Navbar bg="light" variant="light">
-                <Navbar.Brand>Crypto SEO</Navbar.Brand>
-            </Navbar>
-
             <ModalDialog modal={this.state.modal} handleClose={this.handleModalClose} />
 
             <Card>
@@ -281,13 +383,13 @@ class App extends Component {
                     <Form>
                         <Form.Group controlId="formNetwork">
                           <Form.Label>Network</Form.Label>
-                          <Form.Control value={this.state.networkName} readOnly  defaultValue="Not connected" />
+                          <Form.Control value={this.state.appState.networkName} readOnly  defaultValue="Not connected" />
                         </Form.Group>
                         <Form.Group controlId="formAccount">
                           <Form.Label>Account</Form.Label>
                           <br/>
-                          { this.state.currentAccount
-                                ?  <Form.Control value={this.state.currentAccount} readOnly />
+                          { this.state.appState.currentAccount
+                                ?  <Form.Control value={this.state.appState.currentAccount} readOnly />
                                 : <Button onClick={this.connectAccount} variant="outline-info">Connect</Button>
                           }                          
                         </Form.Group>                        
@@ -295,7 +397,7 @@ class App extends Component {
                 </Card.Body>
             </Card>
 
-            {!this.state.CryptoSEOContract
+            {!this.state.appState.CryptoSEOContract
               ? <></>
               : 
               <>
