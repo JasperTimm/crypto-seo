@@ -2,7 +2,7 @@ import React, { Component } from 'react'
 import ReactDOM from 'react-dom'
 import Web3 from 'web3'
 import 'bootstrap/dist/css/bootstrap.min.css'
-import { Container, Nav, Navbar } from 'react-bootstrap'
+import { Container, Nav, Navbar, Jumbotron, Button } from 'react-bootstrap'
 import Create from './create'
 import View from './view'
 const CryptoSEO = require('../../build/contracts/CryptoSEO')
@@ -21,14 +21,43 @@ class Home extends Component {
   constructor(props) {
     super(props)
     this.state = {
+    }
+    this.selectPage = props.selectPage
+  }
 
+  render(){
+    return (
+      <Jumbotron>
+        <h1>Welcome to Crypto SEO</h1>
+        <p>
+          This is a simple <a href="https://www.wikiwand.com/en/Decentralized_application">dApp</a> which
+          enables users to create a commitment which enforces pay-for-performance search result rank increases.
+        </p>
+        <br />
+        <br />
+        <p>
+          <Button variant="primary" onClick={() => {this.selectPage("about")}}>Learn more</Button>
+        </p>
+      </Jumbotron>      
+    )
+  }
+}
+
+class About extends Component {
+  constructor(props) {
+    super(props)
+    this.state = {
     }
   }
 
   render(){
     return (
-      <Container fluid>
-      </Container>
+      <Jumbotron>
+        <h1>About</h1>
+        <p>
+          Here's how it works...
+        </p>
+      </Jumbotron>      
     )
   }
 }
@@ -38,7 +67,8 @@ class App extends Component {
      super(props)
      this.state = {
        accounts: [],
-       currentAccount: null
+       currentAccount: null,
+       page: "home"
      }
 
      if (ethereum) {
@@ -113,23 +143,30 @@ class App extends Component {
     })
   }
 
-  selectPage = (eventKey) => {
-    switch(eventKey) {
+  selectPage = (page) => {
+    this.setState({
+      page: page
+    })
+  }
+
+  displayPage = () => {
+    switch(this.state.page) {
+      case "about":
+        return(
+          <About appState={this.state} web3={this.web3}/>
+        )
       case "create":
-        this.setState({
-          page: <Create appState={this.state} web3={this.web3}/>
-        })
-        return
+        return (
+          <Create appState={this.state} web3={this.web3}/>
+        )
       case "view":
-        this.setState({
-          page: <View appState={this.state} web3={this.web3}/>
-        })
-        return
+        return (
+          <View appState={this.state} web3={this.web3}/>
+        )
       default:
-        this.setState({
-          page: <Home />
-        })
-        return
+        return (
+          <Home selectPage={this.selectPage}/>
+        )
     }
   }
 
@@ -138,7 +175,13 @@ class App extends Component {
     <Container fluid>
         <Navbar bg="light" variant="light">
             <Navbar.Brand>Crypto SEO</Navbar.Brand>
-            <Nav fill variant="tabs">
+            <Nav fill variant="tabs" activeKey={this.state.page}>
+            <Nav.Item>
+                <Nav.Link eventKey="home" onSelect={this.selectPage}>Home</Nav.Link>
+              </Nav.Item>              
+              <Nav.Item>
+                <Nav.Link eventKey="about" onSelect={this.selectPage}>About</Nav.Link>
+              </Nav.Item>              
               <Nav.Item>
                 <Nav.Link eventKey="create" onSelect={this.selectPage}>Create</Nav.Link>
               </Nav.Item>
@@ -147,7 +190,7 @@ class App extends Component {
               </Nav.Item>
             </Nav>
         </Navbar>
-        {this.state.page}
+        {this.displayPage()}
     </Container>
     )
   }
