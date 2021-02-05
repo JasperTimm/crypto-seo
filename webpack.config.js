@@ -7,7 +7,8 @@ module.exports = {
    ], 
    output: {
       path: path.join(__dirname, 'dist'),
-      filename: 'build.js' // The final file will be created in dist/build.js
+      filename: 'build.js', // The final file will be created in dist/build.js
+      sourceMapFilename: "[name].js.map"
    },
    module: {
       rules: [
@@ -30,15 +31,16 @@ module.exports = {
             }
         }]
    },
+   devtool: "source-map"
 //    target: 'node',
 //    externals: {
 //        "request": "request"
 //    }
-   node: {
-    console: true,
-    // child_process: 'empty',
-    fs: 'empty',
-    net: 'empty',
-    tls: 'empty'
-   }
+   // node: {
+   //  console: true,
+   //  // child_process: 'empty',
+   //  fs: 'empty',
+   //  net: 'empty',
+   //  tls: 'empty'
+   // }
 }
