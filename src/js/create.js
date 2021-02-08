@@ -1,7 +1,7 @@
 import React, { Component } from 'react'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Button from 'react-bootstrap/Button'
-import { Container, Form, Card, Modal } from 'react-bootstrap'
+import { Container, Form, Card, Modal, Spinner } from 'react-bootstrap'
 const LINK_TOKEN_MULTIPLIER = 10**18
 const ORACLE_PAYMENT = 1 * LINK_TOKEN_MULTIPLIER
 
@@ -14,12 +14,19 @@ function ModalDialog(props) {
           </Modal.Header>
           <Modal.Body>{props.modal.message}</Modal.Body>
           <Modal.Footer>
-            {/* <Button variant="secondary" onClick={props.handleClose}>
-              Close
-            </Button> */}
-            <Button variant="primary" onClick={props.handleClose}>
-              OK
+            {props.modal.secondaryBtn ?
+            <Button variant="secondary" onClick={props.handleClose}>
+              {props.modal.secondaryBtn.text}
             </Button>
+            : <></>}
+            {props.modal.primaryBtn ?
+            <Button variant="primary" onClick={props.modal.primaryBtn.fn ? props.modal.primaryBtn.fn : props.handleClose}>
+              {props.modal.primaryBtn.text}
+            </Button>
+            : <></>}
+            {props.modal.spinner ?
+            <Spinner animation="border" />
+            : <></>}
           </Modal.Footer>
         </Modal>
       </>
@@ -34,13 +41,14 @@ export default class Create extends Component {
          searchTerm: '',
          siteName: '',
          durationUnits: 'Minutes',
-         payLinkEnabled: true,
-         createEnabled: false,
+         submitEnabled: true,
+         LINKApproved: false,
          modal: {show: false}
        }
  
        this.web3 = props.web3
        this.handleModalClose = () => this.setState({modal: {show: false}})
+       this.selectPage = props.selectPage
     }
  
      componentDidMount() {  
@@ -75,48 +83,86 @@ export default class Create extends Component {
        this.setState({...this.state, [evt.target.name]: value})
      }
  
-     showModal = (title, message) => this.setState({
+     showSimpleModal = (title, message) => this.setState({
        modal: {
          show: true,
          title: title,
-         message: message
+         message: message,
+         primaryBtn: {
+           text: "OK"
+         }
        }
      })
  
-     payLINK =  async () => {
+     showModal = (modal) => this.setState({
+      modal: modal
+    })
+
+     submitCommitment =  async () => {
        if (! this.state.appState.currentAccount) {
-         this.showModal("Invalid account", "No account is connected via Web3 to the site")
+         this.showSimpleModal("Invalid account", "No account is connected via Web3 to the site")
          return
        }
  
+       if (this.state.LINKApproved) {
+         this.confirmCreation()
+         return
+       }
+
        let linkBal = await this.state.appState.LinkTokenContract.methods.balanceOf(this.state.appState.currentAccount).call(
          {from: this.state.appState.currentAccount})
  
        if (linkBal < ORACLE_PAYMENT) {
-         this.showModal("Insufficient LINK", "This account has insufficient LINK to create this contract")
+         this.showSimpleModal("Insufficient LINK", "This account has insufficient LINK to create this contract")
          return
        }
  
-       let onSuccess = (receipt) => {
-         console.log("LINK approved: " + receipt)
-         this.setState({
-           payLinkEnabled: false,
-           createEnabled: true
-         }) 
-       }
+       this.showModal({
+        show: true,
+        title: "Approve LINK payment", 
+        message: <>
+                  In order to create this SEO Commitment we need to approve a transfer of <b>1 LINK</b> to this contract from 
+                  your account.
+                  <br /><br />
+                  This will cover the cost of using the Chainlink Oracle to lookup the search rankings 
+                  at the conclusion of this commitment.
+                  </>,
+        primaryBtn: {text: "Approve LINK", fn: this.makeLINKPayment},
+        secondaryBtn: {text: "Cancel"}
+      })
+    }
+
+    makeLINKPayment = () => {
  
        let onWaiting = (txHash) => {
          console.log("Awaiting confirmation: " + txHash)
          this.setState({
-           payLinkEnabled: false
+          submitEnabled: false
+         })
+         this.showModal({
+           show: true,
+           title: "Awaiting confirmation", 
+           message: "Waiting for confirmation of LINK approval...",
+           spinner: true
          })
        }
  
+       let onSuccess = (receipt) => {
+        console.log("LINK approved: " + receipt)
+        this.setState({
+         submitEnabled: true,
+         LINKApproved: true
+        })
+        this.confirmCreation()
+       }          
+      
+
        let onError = (error) => {
          console.error(error)
          this.setState({
-           payLinkEnabled: true
+           submitEnabled: true
          })
+         this.showSimpleModal("Error", "There was an error with the LINK payment. Please try again.")
        }
  
        console.log("About to call approve on LINK token...")
@@ -127,7 +173,17 @@ export default class Create extends Component {
          .then(onSuccess)
      }
  
-     createContract = () => {
+     confirmCreation = () =>{
+      this.showModal({
+        show: true,
+        title: "Confirmed", 
+        message: "LINK approval confirmed. We can now proceed to create the SEO Commitment",
+        primaryBtn: {text: "Create", fn: this.createCommitment},
+        secondaryBtn: {text: "Cancel"}
+      })
+     }
+
+     createCommitment = () => {
        let timeNow = Math.floor(Date.now() / 1000)
        let expiryTime = 0
        if (this.state.durationUnits == "Minutes") {
@@ -152,21 +208,68 @@ export default class Create extends Component {
          payee: this.state.payee
        }
  
-       console.log("About to call createSEOCommitment with...")
-       console.log(callObj)
- 
+       let onWaiting = (txHash) => {
+        console.log("Awaiting confirmation: " + txHash)
+        this.setState({
+         submitEnabled: false
+        })
+        this.showModal({
+          show: true,
+          title: "Awaiting confirmation", 
+          message: "Waiting for confirmation of commitment creation...",
+          spinner: true
+        })
+      }
+
+      let onSuccess = (receipt) => {
+        console.log("SEO Commitment created!")
+        let createdId = receipt.events.SEOCommitmentCreated.returnValues[0]
+        console.log("Created SEO Commitment ID is: " + createdId)
+        this.setState({
+          createdCommitmentId: createdId
+        })
+
+       this.showModal({
+        show: true,
+        title: "Confirmed", 
+        message: <>
+        Success! Your SEO Commitment has been created! 
+        <br />
+        <br />
+        SEO Commitment ID: <b>{createdId}</b>
+        <br />
+        <br />
+        You can now see the details of your created commitment in the View tab
+        </>,
+        primaryBtn: {text: "View", fn: this.viewCommitment}
+      })          
+     }
+
+      let onError = (error) => {
+        console.error(error)
+        this.setState({
+          submitEnabled: true
+        })
+        this.showSimpleModal("Error", "There was an error creating your SEO Commitment. Please try again.")
+      }
+       
        this.state.appState.CryptoSEOContract.methods.createSEOCommitment(callObj.site, callObj.searchTerm, callObj.domainMatch,
          callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.expiryTime, callObj.payee).send( 
-         {value: callObj.maxAmtEth, from: this.state.appState.currentAccount},
-         (err, result) => {
-           if (err) {
-             console.error(err)
-           } else {
-             console.log(result)
-           }
-         })
+         {value: callObj.maxAmtEth, from: this.state.appState.currentAccount})
+         .once('transactionHash', onWaiting)
+         .on('error', onError)
+         .then(onSuccess)
      }
  
+     viewCommitment = () => {
+      this.selectPage({
+        name: "view",
+        opt: {
+          seoCommitmentId: this.state.createdCommitmentId
+        }
+      })
+     }
+
      render(){
          return (
          <Container fluid>
@@ -247,10 +350,7 @@ export default class Create extends Component {
                              </Form.Control>
                          </Form.Group>                                                
                          <Form.Group>
-                             <Button onClick={async () => await this.payLINK()} variant="success" disabled={!this.state.payLinkEnabled}>Pay LINK</Button>
-                             <br/>
-                             <br/>
-                             <Button onClick={this.createContract} variant="success" disabled={!this.state.createEnabled}>Create contract</Button>
+                             <Button onClick={async () => await this.submitCommitment()} variant="success" disabled={!this.state.submitEnabled}>Submit</Button>
                          </Form.Group>                        
                      </Form>
                  </Card.Body>

@@ -7,13 +7,15 @@ export default class View extends Component {
       super(props)
       this.state = {
         appState: props.appState,
+        seoCommitmentId: props.opt ? props.opt.seoCommitmentId : null,
         seoCommitment: null
       }
-  
-  
     }
   
     componentDidMount() {
+        if (this.state.seoCommitmentId) {
+            this.lookupSeoCommitment()
+        }
     }
 
     handleChange = (evt) => {

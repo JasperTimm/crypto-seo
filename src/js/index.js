@@ -36,7 +36,7 @@ class Home extends Component {
         <br />
         <br />
         <p>
-          <Button variant="primary" onClick={() => {this.selectPage("about")}}>Learn more</Button>
+          <Button variant="primary" onClick={() => {this.selectPage({name: "about"})}}>Learn more</Button>
         </p>
       </Jumbotron>      
     )
@@ -68,7 +68,7 @@ class App extends Component {
      this.state = {
        accounts: [],
        currentAccount: null,
-       page: "home"
+       page: {name: "home"}
      }
 
      if (ethereum) {
@@ -111,14 +111,6 @@ class App extends Component {
       accounts: accounts,
       currentAccount: accounts.length == 0 ? null : accounts[0]
     })
-
-    if (this.state.currentAccount && this.state.LinkTokenContract) {
-      this.state.LinkTokenContract.methods.balanceOf(this.state.currentAccount).call(
-        {from: this.state.currentAccount})
-        .then(function(receipt) {
-          console.log(receipt)
-        })
-    }
   }
 
   handleChainChanged = (chainId) => {
@@ -149,19 +141,25 @@ class App extends Component {
     })
   }
 
+  simpleSelectPage = (pageName) => {
+    this.setState({
+      page: {name: pageName}
+    })
+  }
+
   displayPage = () => {
-    switch(this.state.page) {
+    switch(this.state.page.name) {
       case "about":
         return(
           <About appState={this.state} web3={this.web3}/>
         )
       case "create":
         return (
-          <Create appState={this.state} web3={this.web3}/>
+          <Create appState={this.state} web3={this.web3} selectPage={this.selectPage}/>
         )
       case "view":
         return (
-          <View appState={this.state} web3={this.web3}/>
+          <View appState={this.state} web3={this.web3} opt={this.state.page.opt}/>
         )
       default:
         return (
@@ -175,18 +173,18 @@ class App extends Component {
     <Container fluid>
         <Navbar bg="light" variant="light">
             <Navbar.Brand>Crypto SEO</Navbar.Brand>
-            <Nav fill variant="tabs" activeKey={this.state.page}>
+            <Nav fill variant="tabs" activeKey={this.state.page.name}>
             <Nav.Item>
-                <Nav.Link eventKey="home" onSelect={this.selectPage}>Home</Nav.Link>
+                <Nav.Link eventKey="home" onSelect={this.simpleSelectPage}>Home</Nav.Link>
               </Nav.Item>              
               <Nav.Item>
-                <Nav.Link eventKey="about" onSelect={this.selectPage}>About</Nav.Link>
+                <Nav.Link eventKey="about" onSelect={this.simpleSelectPage}>About</Nav.Link>
               </Nav.Item>              
               <Nav.Item>
-                <Nav.Link eventKey="create" onSelect={this.selectPage}>Create</Nav.Link>
+                <Nav.Link eventKey="create" onSelect={this.simpleSelectPage}>Create</Nav.Link>
               </Nav.Item>
               <Nav.Item>
-                <Nav.Link eventKey="view" onSelect={this.selectPage}>View</Nav.Link>
+                <Nav.Link eventKey="view" onSelect={this.simpleSelectPage}>View</Nav.Link>
               </Nav.Item>
             </Nav>
         </Navbar>
