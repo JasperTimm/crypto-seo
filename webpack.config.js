@@ -14,6 +14,14 @@ module.exports = {
       rules: [
         // { test: /\.json$/, use: ['json-loader'] },
         {
+            test: /\.(png|svg|jpg|jpeg|gif)$/i,
+            use: [
+               {
+                 loader: 'file-loader',
+               },
+             ],
+        },
+        {
             test: /\.css$/, // To load the css in react
             use: ['style-loader', 'css-loader']
         }, 

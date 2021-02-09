@@ -37,7 +37,6 @@ export default class Create extends Component {
     constructor(props){
        super(props)
        this.state = {
-         appState: props.appState,
          searchTerm: '',
          siteName: '',
          durationUnits: 'Minutes',
@@ -47,25 +46,12 @@ export default class Create extends Component {
        }
  
        this.web3 = props.web3
+       this.getEth = props.getEth
        this.handleModalClose = () => this.setState({modal: {show: false}})
        this.selectPage = props.selectPage
     }
  
      componentDidMount() {  
-     }
- 
-     connectAccount = () => {
-       console.log("Connect clicked")
-       ethereum
-         .request({ method: 'eth_requestAccounts' })
-         .then(this.handleAccountsChanged)
-         .catch((err) => {
-           if (err.code === 4001) {
-             console.log('Please connect to Metamask.')
-           } else {
-             console.error(err)
-           }
-         })
      }
  
      refreshSearchRank = () => {
@@ -99,7 +85,7 @@ export default class Create extends Component {
     })
 
      submitCommitment =  async () => {
-       if (! this.state.appState.currentAccount) {
+       if (! this.getEth().currentAccount) {
          this.showSimpleModal("Invalid account", "No account is connected via Web3 to the site")
          return
        }
@@ -109,8 +95,8 @@ export default class Create extends Component {
          return
        }
 
-       let linkBal = await this.state.appState.LinkTokenContract.methods.balanceOf(this.state.appState.currentAccount).call(
-         {from: this.state.appState.currentAccount})
+       let linkBal = await this.getEth().LinkTokenContract.methods.balanceOf(this.getEth().currentAccount).call(
+         {from: this.getEth().currentAccount})
  
        if (linkBal < ORACLE_PAYMENT) {
          this.showSimpleModal("Insufficient LINK", "This account has insufficient LINK to create this contract")
@@ -166,8 +152,8 @@ export default class Create extends Component {
        }
  
        console.log("About to call approve on LINK token...")
-       this.state.appState.LinkTokenContract.methods.approve(this.state.appState.CryptoSEOContract._address, String(ORACLE_PAYMENT)).send( 
-         {from: this.state.appState.currentAccount})
+       this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(ORACLE_PAYMENT)).send( 
+         {from: this.getEth().currentAccount})
          .once('transactionHash', onWaiting)
          .on('error', onError)
          .then(onSuccess)
@@ -253,9 +239,9 @@ export default class Create extends Component {
         this.showSimpleModal("Error", "There was an error creating your SEO Commitment. Please try again.")
       }
        
-       this.state.appState.CryptoSEOContract.methods.createSEOCommitment(callObj.site, callObj.searchTerm, callObj.domainMatch,
+       this.getEth().CryptoSEOContract.methods.createSEOCommitment(callObj.site, callObj.searchTerm, callObj.domainMatch,
          callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.expiryTime, callObj.payee).send( 
-         {value: callObj.maxAmtEth, from: this.state.appState.currentAccount})
+         {value: callObj.maxAmtEth, from: this.getEth().currentAccount})
          .once('transactionHash', onWaiting)
          .on('error', onError)
          .then(onSuccess)
@@ -271,35 +257,10 @@ export default class Create extends Component {
      }
 
      render(){
-         return (
-         <Container fluid>
-             <ModalDialog modal={this.state.modal} handleClose={this.handleModalClose} />
- 
-             <Card>
-                 <Card.Header>Web3 Connection</Card.Header>
-                 <Card.Body>
-                     <Form>
-                         <Form.Group controlId="formNetwork">
-                           <Form.Label>Network</Form.Label>
-                           <Form.Control value={this.state.appState.networkName} readOnly />
-                         </Form.Group>
-                         <Form.Group controlId="formAccount">
-                           <Form.Label>Account</Form.Label>
-                           <br/>
-                           { this.state.appState.currentAccount
-                                 ?  <Form.Control value={this.state.appState.currentAccount} readOnly />
-                                 : <Button onClick={this.connectAccount} variant="outline-info">Connect</Button>
-                           }                          
-                         </Form.Group>                        
-                     </Form>
-                 </Card.Body>
-             </Card>
- 
-             {!this.state.appState.CryptoSEOContract
-               ? <></>
-               : 
-               <>
-               <Card>
+        return (
+          <Container fluid>
+            <ModalDialog modal={this.state.modal} handleClose={this.handleModalClose} />
+            <Card>
                  <Card.Header>Search details</Card.Header>
                  <Card.Body>
                      <Form>
@@ -322,42 +283,40 @@ export default class Create extends Component {
                          </Form.Group>                        
                      </Form>
                  </Card.Body>
-             </Card>
+              </Card>
  
-             <Card>
-                 <Card.Header>Payment details</Card.Header>
-                 <Card.Body>
-                     <Form>
-                         <Form.Group controlId="formRecipAddr">
-                             <Form.Label>Recipient eth address</Form.Label>
-                             <Form.Control name="payee" onChange={this.handleChange} placeholder="Enter eth address" />
-                         </Form.Group>
-                         <Form.Group controlId="formEthAmtPerRank">
-                             <Form.Label>Amount eth per rank increase</Form.Label>
-                             <Form.Control name="amtPerRankEth"  onChange={this.handleChange} placeholder="Enter amount in eth" />
-                         </Form.Group>
-                         <Form.Group controlId="formMaxEthAmt">
-                             <Form.Label>Max amount eth to spend</Form.Label>
-                             <Form.Control name="maxAmtEth"  onChange={this.handleChange} placeholder="Enter max amount in eth" />
-                         </Form.Group>
-                         <Form.Group controlId="formDuration">
-                             <Form.Label>Contract duration</Form.Label>
-                             <Form.Control name="durationAmt"  onChange={this.handleChange} placeholder="Enter duration" />
-                             <Form.Control name="durationUnits"  onChange={this.handleChange} as="select">
-                               <option>Minutes</option>
-                               <option>Hours</option>
-                               <option>Days</option>
-                             </Form.Control>
-                         </Form.Group>                                                
-                         <Form.Group>
-                             <Button onClick={async () => await this.submitCommitment()} variant="success" disabled={!this.state.submitEnabled}>Submit</Button>
-                         </Form.Group>                        
-                     </Form>
-                 </Card.Body>
-             </Card>
-             </>
-         }          
-         </Container>
+            <Card>
+              <Card.Header>Payment details</Card.Header>
+              <Card.Body>
+                  <Form>
+                      <Form.Group controlId="formRecipAddr">
+                          <Form.Label>Recipient eth address</Form.Label>
+                          <Form.Control name="payee" onChange={this.handleChange} placeholder="Enter eth address" />
+                      </Form.Group>
+                      <Form.Group controlId="formEthAmtPerRank">
+                          <Form.Label>Amount eth per rank increase</Form.Label>
+                          <Form.Control name="amtPerRankEth"  onChange={this.handleChange} placeholder="Enter amount in eth" />
+                      </Form.Group>
+                      <Form.Group controlId="formMaxEthAmt">
+                          <Form.Label>Max amount eth to spend</Form.Label>
+                          <Form.Control name="maxAmtEth"  onChange={this.handleChange} placeholder="Enter max amount in eth" />
+                      </Form.Group>
+                      <Form.Group controlId="formDuration">
+                          <Form.Label>Contract duration</Form.Label>
+                          <Form.Control name="durationAmt"  onChange={this.handleChange} placeholder="Enter duration" />
+                          <Form.Control name="durationUnits"  onChange={this.handleChange} as="select">
+                            <option>Minutes</option>
+                            <option>Hours</option>
+                            <option>Days</option>
+                          </Form.Control>
+                      </Form.Group>                                                
+                      <Form.Group>
+                          <Button onClick={async () => await this.submitCommitment()} variant="success" disabled={!this.state.submitEnabled}>Submit</Button>
+                      </Form.Group>                        
+                  </Form>
+            </Card.Body>
+            </Card>
+          </Container>
          )
      }
  }

@@ -2,9 +2,11 @@ import React, { Component } from 'react'
 import ReactDOM from 'react-dom'
 import Web3 from 'web3'
 import 'bootstrap/dist/css/bootstrap.min.css'
-import { Container, Nav, Navbar, Jumbotron, Button } from 'react-bootstrap'
+import { Container, Nav, Navbar, Jumbotron, Button, Form, Card } from 'react-bootstrap'
 import Create from './create'
 import View from './view'
+import NetworkIcon from '../../assets/network_icon.png'
+import UserIcon from '../../assets/user_icon.png'
 const CryptoSEO = require('../../build/contracts/CryptoSEO')
 const LinkToken = require('../../build/contracts/LinkTokenInterface')
 const LinkAddress = {
@@ -13,9 +15,11 @@ const LinkAddress = {
   }
 }
 const networkNames = {
-  "4": "Rinkeby"
+  "1": "Mainnet",
+  "3": "Ropsten",
+  "4": "Rinkeby",
+  "42": "Kovan"
 }
-
 
 class Home extends Component {
   constructor(props) {
@@ -66,9 +70,12 @@ class App extends Component {
   constructor(props){
      super(props)
      this.state = {
-       accounts: [],
-       currentAccount: null,
-       page: {name: "home"}
+      page: {name: "home"},
+      eth: {
+        accounts: [],
+        currentAccount: null,
+        networkName: "Not connected"
+      }
      }
 
      if (ethereum) {
@@ -108,8 +115,11 @@ class App extends Component {
     console.log(accounts)
 
     this.setState({
-      accounts: accounts,
-      currentAccount: accounts.length == 0 ? null : accounts[0]
+      eth: {
+        ...this.state.eth,
+        accounts: accounts,
+        currentAccount: accounts.length == 0 ? null : accounts[0]
+      }
     })
   }
 
@@ -118,21 +128,26 @@ class App extends Component {
     
     const networkId = String(parseInt(chainId))
     console.log("Network ID is: " + networkId)
-    if (CryptoSEO.networks[networkId] == undefined) {
-        console.error("CryptoSEO contract not deployed to this network")
-        this.setState({
-          CryptoSEOContract: null,
-          LinkTokenContract: null,
-          networkName: "CryptoSEO is not deployed here, please change to Rinkeby"
-        })          
-        return
-    }
 
-    this.setState({
-      CryptoSEOContract: new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address),
-      LinkTokenContract: new this.web3.eth.Contract(LinkToken.abi, LinkAddress.networks[networkId]),
-      networkName: networkNames[networkId]
-    })
+    if (CryptoSEO.networks[networkId] == undefined) {
+      this.setState({
+        eth: {
+          ...this.state.eth,
+          networkName: networkNames[networkId],
+          CryptoSEOContract: null,
+          LinkTokenContract: null
+        }
+      })          
+    } else {
+      this.setState({
+        eth: {
+          ...this.state.eth,
+          networkName: networkNames[networkId],
+          CryptoSEOContract: new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address),
+          LinkTokenContract: new this.web3.eth.Contract(LinkToken.abi, LinkAddress.networks[networkId])
+        }
+      })
+    }
   }
 
   selectPage = (page) => {
@@ -151,15 +166,19 @@ class App extends Component {
     switch(this.state.page.name) {
       case "about":
         return(
-          <About appState={this.state} web3={this.web3}/>
+          <About />
         )
       case "create":
         return (
-          <Create appState={this.state} web3={this.web3} selectPage={this.selectPage}/>
+          this.state.eth.CryptoSEOContract 
+          ? <Create getEth={this.getEth} web3={this.web3} selectPage={this.selectPage}/> 
+          : this.errorCard()
         )
       case "view":
         return (
-          <View appState={this.state} web3={this.web3} opt={this.state.page.opt}/>
+          this.state.eth.CryptoSEOContract 
+          ? <View getEth={this.getEth} web3={this.web3} opt={this.state.page.opt}/>
+          : this.errorCard()
         )
       default:
         return (
@@ -168,13 +187,53 @@ class App extends Component {
     }
   }
 
+  errorCard = () => {
+    return (
+      <Card>
+        <Card.Header>Network Error</Card.Header>
+        <Card.Body>
+            The Crypto SEO contract is not deployed to this network. Please change to the Rinkeby testnet.
+        </Card.Body>
+      </Card>      
+    )
+  }
+
+  navIcon(src) {
+    return (
+      <img
+        src={src}
+        width="30"
+        height="30"
+        style={{marginRight: "10px", marginLeft: "10px"}}
+      />
+    )
+  }
+
+  connectAccount = () => {
+    console.log("Connect clicked")
+    ethereum
+      .request({ method: 'eth_requestAccounts' })
+      .then(this.handleAccountsChanged)
+      .catch((err) => {
+        if (err.code === 4001) {
+          console.log('Please connect to Metamask.')
+        } else {
+          console.error(err)
+        }
+      })
+  }
+
+  getEth = () => {
+    return this.state.eth
+  }
+
   render(){
     return (
     <Container fluid>
-        <Navbar bg="light" variant="light">
-            <Navbar.Brand>Crypto SEO</Navbar.Brand>
+        <Navbar bg="light" variant="light" expand="lg">
+          <Navbar.Brand>Crypto SEO</Navbar.Brand>
             <Nav fill variant="tabs" activeKey={this.state.page.name}>
-            <Nav.Item>
+              <Nav.Item>
                 <Nav.Link eventKey="home" onSelect={this.simpleSelectPage}>Home</Nav.Link>
               </Nav.Item>              
               <Nav.Item>
@@ -186,6 +245,17 @@ class App extends Component {
               <Nav.Item>
                 <Nav.Link eventKey="view" onSelect={this.simpleSelectPage}>View</Nav.Link>
               </Nav.Item>
+            </Nav>
+            <Nav className="ml-auto">
+              <Form inline>
+                {this.navIcon(NetworkIcon)}
+                <Form.Control value={this.state.eth.networkName} readOnly></Form.Control>
+                {this.navIcon(UserIcon)}
+                { this.state.eth.currentAccount
+                  ?  <Form.Control value={this.state.eth.currentAccount} readOnly />
+                  : <Button onClick={this.connectAccount} variant="outline-info">Connect</Button>
+                } 
+              </Form>
             </Nav>
         </Navbar>
         {this.displayPage()}

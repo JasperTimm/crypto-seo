@@ -8,12 +8,12 @@ export default class View extends Component {
     constructor(props) {
       super(props)
       this.state = {
-        appState: props.appState,
         seoCommitmentId: props.opt ? props.opt.seoCommitmentId : null,
         seoCommitment: null
       }
 
       this.web3 = props.web3
+      this.getEth = props.getEth
     }
   
     componentDidMount() {
@@ -31,8 +31,8 @@ export default class View extends Component {
         this.setState({seoCommitment: null})
         let id = parseInt(this.state.seoCommitmentId)
         if (!isNaN(id)) {
-            this.state.appState.CryptoSEOContract.methods.seoCommitmentList(id).call(
-                {from: this.state.appState.currentAccount})
+            this.getEth().CryptoSEOContract.methods.seoCommitmentList(id).call(
+                {from: this.getEth().currentAccount})
                 .then((resp) => {
                 let commitment = {}
                 Object.keys(resp)
