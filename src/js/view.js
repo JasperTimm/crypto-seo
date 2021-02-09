@@ -1,6 +1,8 @@
 
 import React, { Component } from 'react'
-import { Container, Form, Card, Button } from 'react-bootstrap'
+import { Container, Form, Card, Button, Table } from 'react-bootstrap'
+
+let statusCodes = ["Created", "Processing"]
 
 export default class View extends Component {
     constructor(props) {
@@ -10,6 +12,8 @@ export default class View extends Component {
         seoCommitmentId: props.opt ? props.opt.seoCommitmentId : null,
         seoCommitment: null
       }
+
+      this.web3 = props.web3
     }
   
     componentDidMount() {
@@ -45,21 +49,43 @@ export default class View extends Component {
     displaySEOCommitment = () => {
         if (!this.state.seoCommitment.isValue) {
             return (
-                <Form.Group>
-                    <Form.Label>No SEO Commitment found for that ID</Form.Label>
-                </Form.Group>
+                <Form>No SEO Commitment found for that ID</Form>
             )
         } else {
             return (
-                Object.keys(this.state.seoCommitment).map((field) => {
-                return (
-                <Form.Group key={field} >
-                    <Form.Label>{field}</Form.Label>
-                    <Form.Control value={this.state.seoCommitment[field]} readOnly />
-                </Form.Group>
-                )
-                })
+                <Table bordered hover size="sm">
+                    <tbody>
+                        <tr key="seoCommitmentId">
+                            <td><b>seoCommitmentId</b></td>
+                            <td>{this.state.seoCommitmentId}</td>
+                        </tr>
+                        {Object.keys(this.state.seoCommitment).filter((k) => k != "isValue").map((field) => {
+                            let val = this.state.seoCommitment[field]
+                            return (
+                                <tr key={field}>
+                                    <td><b>{field}</b></td>
+                                    <td>{this.displayVal(field, val)}</td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </Table>
             )
+        }
+    }
+
+    displayVal = (field, val) => {
+        if (typeof val == "boolean") {
+            return val ? "true" : "false"
+        } else if (["amtPerRankEth", "maxPayableEth"].includes(field)) {
+            return (<>{val} &nbsp;&nbsp; <i>({this.web3.utils.fromWei(val)} ETH)</i></>)
+        } else if (field == "timeToExecute") {
+            let d = new Date(val * 1000)
+            return (<>{val} &nbsp;&nbsp; <i>({String(d)})</i></>)
+        } else if (field == "status") {
+            return (<>{val} &nbsp;&nbsp; <i>({statusCodes[val]})</i></>)
+        } else {
+            return val
         }
     }
   
@@ -67,14 +93,18 @@ export default class View extends Component {
       return (
         <Container fluid>
             <Card>
+                <Card.Header>Search</Card.Header>
                 <Card.Body>
-                    <Form>
-                        <Form.Group>
-                             <Form.Control name="seoCommitmentId" onChange={this.handleChange} placeholder="SEO Commitment ID" />
-                             <br/>
-                             <Button onClick={this.lookupSeoCommitment} variant="success">Lookup</Button>
-                         </Form.Group>                        
-                    </Form>
+                    {this.state.seoCommitment 
+                    ?   <Button onClick={() => {this.setState({seoCommitment: null})}}>← Back</Button>
+                    :   <Form>
+                            <Form.Group>
+                                <Form.Control name="seoCommitmentId" onChange={this.handleChange} placeholder="SEO Commitment ID" />
+                                <br/>
+                                <Button onClick={this.lookupSeoCommitment} variant="success">Search</Button>
+                            </Form.Group>                        
+                        </Form>
+                    }
                 </Card.Body>
             </Card>
             {!this.state.seoCommitment 
@@ -82,9 +112,7 @@ export default class View extends Component {
                 :   <Card>
                         <Card.Header>SEO Commitment</Card.Header>
                         <Card.Body>
-                            <Form>
                             {this.displaySEOCommitment()}                       
-                            </Form>
                         </Card.Body>
                     </Card>
             }
