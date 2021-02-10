@@ -1,7 +1,7 @@
 import React, { Component } from 'react'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Button from 'react-bootstrap/Button'
-import { Container, Form, Card, Modal, Spinner } from 'react-bootstrap'
+import { Container, Form, Card, Modal, Spinner, Col, InputGroup } from 'react-bootstrap'
 const LINK_TOKEN_MULTIPLIER = 10**18
 const ORACLE_PAYMENT = 1 * LINK_TOKEN_MULTIPLIER
 
@@ -42,7 +42,8 @@ export default class Create extends Component {
          durationUnits: 'Minutes',
          submitEnabled: true,
          LINKApproved: false,
-         modal: {show: false}
+         modal: {show: false},
+         formValidated: false
        }
  
        this.web3 = props.web3
@@ -256,62 +257,94 @@ export default class Create extends Component {
       })
      }
 
+    checkForm = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      this.setState({
+        formValidated: true
+      })
+
+      if (!event.currentTarget.checkValidity()) return
+
+      this.submitCommitment()
+    }
+
      render(){
         return (
-          <Container fluid>
+          <Container fluid="xl">
             <ModalDialog modal={this.state.modal} handleClose={this.handleModalClose} />
             <Card>
-                 <Card.Header>Search details</Card.Header>
+                 <Card.Header>SEO Commitment details</Card.Header>
                  <Card.Body>
-                     <Form>
-                         <Form.Group controlId="formSearchTerm">
-                             <Form.Label>Search term</Form.Label>
-                             <Form.Control name="searchTerm" onChange={this.handleChange} placeholder="Enter search term" />
+                     <Form noValidate validated={this.state.formValidated} onSubmit={this.checkForm}>
+                       <Form.Row>
+                          <Form.Group as={Col} md="4">
+                              <Form.Label>Search term</Form.Label>
+                              <Form.Control required name="searchTerm" onChange={this.handleChange} placeholder="Enter search term" />
+                          </Form.Group>
+                          <Form.Group as={Col} md="8">
+                              <Form.Label>Site name</Form.Label>
+                              <InputGroup>
+                                <Form.Control required name="siteName" onChange={this.handleChange} placeholder="Enter site name" />
+                                <InputGroup.Append>
+                                  <InputGroup.Text>Match domain only</InputGroup.Text>
+                                  <InputGroup.Checkbox name="domainMatch" onChange={this.handleChange} />
+                                </InputGroup.Append>
+                              </InputGroup>
+                          </Form.Group>
+                        </Form.Row>
+                        <Form.Row>                        
+                         <Form.Group as={Col} md="4">
+                             <Form.Label>Current search rank</Form.Label>
+                             <InputGroup>
+                             <Button onClick={this.refreshSearchRank} variant="outline-primary">Refresh</Button>
+                             <Form.Control required name="initialSearchRank" onChange={this.handleChange} placeholder="Site ranking" />
+                             </InputGroup>
                          </Form.Group>
-                         <Form.Group controlId="formSiteName">
-                             <Form.Label>Site name</Form.Label>
-                             <Form.Control name="siteName" onChange={this.handleChange} placeholder="Enter site name" />
-                         </Form.Group>
-                         <Form.Group controlId="formDomainMatch">
-                             <Form.Check type="checkbox" label="Domain Match" name="domainMatch" onChange={this.handleChange} />
-                         </Form.Group>                        
-                         <Form.Group controlId="formCurrentRank">
-                             <Form.Label>Current rank</Form.Label>
-                             <br/>
-                             <Button onClick={this.refreshSearchRank} variant="success">Refresh</Button>
-                             <Form.Control name="initialSearchRank" onChange={this.handleChange} placeholder="Site ranking" />
-                         </Form.Group>                        
-                     </Form>
-                 </Card.Body>
-              </Card>
- 
-            <Card>
-              <Card.Header>Payment details</Card.Header>
-              <Card.Body>
-                  <Form>
-                      <Form.Group controlId="formRecipAddr">
+                        </Form.Row>                        
+                    <Form.Row>
+                      <Form.Group as={Col} md="5">
                           <Form.Label>Recipient eth address</Form.Label>
-                          <Form.Control name="payee" onChange={this.handleChange} placeholder="Enter eth address" />
+                          <Form.Control required name="payee" onChange={this.handleChange} placeholder="Enter eth address" />
                       </Form.Group>
-                      <Form.Group controlId="formEthAmtPerRank">
-                          <Form.Label>Amount eth per rank increase</Form.Label>
-                          <Form.Control name="amtPerRankEth"  onChange={this.handleChange} placeholder="Enter amount in eth" />
+                    </Form.Row>
+                    <Form.Row>
+                      <Form.Group as={Col} md="4">
+                          <Form.Label>ETH paid per search rank increase</Form.Label>
+                          <InputGroup>
+                            <Form.Control required name="amtPerRankEth"  onChange={this.handleChange} placeholder="Enter amount in eth" />
+                            <InputGroup.Append>
+                              <InputGroup.Text>ETH</InputGroup.Text>
+                            </InputGroup.Append>
+                          </InputGroup>
                       </Form.Group>
-                      <Form.Group controlId="formMaxEthAmt">
-                          <Form.Label>Max amount eth to spend</Form.Label>
-                          <Form.Control name="maxAmtEth"  onChange={this.handleChange} placeholder="Enter max amount in eth" />
+                      <Form.Group as={Col} md="4">
+                          <Form.Label>Max amount ETH to payout</Form.Label>
+                          <InputGroup>
+                            <Form.Control required name="maxAmtEth"  onChange={this.handleChange} placeholder="Enter max amount in eth" />
+                            <InputGroup.Append>
+                              <InputGroup.Text>ETH</InputGroup.Text>
+                            </InputGroup.Append>
+                          </InputGroup>                          
                       </Form.Group>
-                      <Form.Group controlId="formDuration">
+                      <Form.Group as={Col} md="4">
                           <Form.Label>Contract duration</Form.Label>
-                          <Form.Control name="durationAmt"  onChange={this.handleChange} placeholder="Enter duration" />
-                          <Form.Control name="durationUnits"  onChange={this.handleChange} as="select">
-                            <option>Minutes</option>
-                            <option>Hours</option>
-                            <option>Days</option>
-                          </Form.Control>
-                      </Form.Group>                                                
+                          <InputGroup>
+                            <Form.Control required name="durationAmt"  onChange={this.handleChange} placeholder="Enter duration" />
+                            <InputGroup.Append>
+                              <Form.Control name="durationUnits"  onChange={this.handleChange} as="select">
+                                <option>Minutes</option>
+                                <option>Hours</option>
+                                <option>Days</option>
+                              </Form.Control>
+                            </InputGroup.Append>
+                          </InputGroup>
+                      </Form.Group>
+                      </Form.Row>
+                      <br/>                                                
                       <Form.Group>
-                          <Button onClick={async () => await this.submitCommitment()} variant="success" disabled={!this.state.submitEnabled}>Submit</Button>
+                          <Button type="submit" variant="success" disabled={!this.state.submitEnabled}>Submit</Button>
                       </Form.Group>                        
                   </Form>
             </Card.Body>

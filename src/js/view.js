@@ -1,6 +1,6 @@
 
 import React, { Component } from 'react'
-import { Container, Form, Card, Button, Table } from 'react-bootstrap'
+import { Container, Form, Card, Button, Table, Col } from 'react-bootstrap'
 
 let statusCodes = ["Created", "Processing"]
 
@@ -91,14 +91,14 @@ export default class View extends Component {
   
     render(){
       return (
-        <Container fluid>
+        <Container fluid="xl">
             <Card>
                 <Card.Header>Search</Card.Header>
                 <Card.Body>
                     {this.state.seoCommitment 
-                    ?   <Button onClick={() => {this.setState({seoCommitment: null})}}>← Back</Button>
+                    ?   <Button variant="outline-primary" onClick={() => {this.setState({seoCommitment: null})}}>← Back</Button>
                     :   <Form>
-                            <Form.Group>
+                            <Form.Group as={Col} md="3">
                                 <Form.Control name="seoCommitmentId" onChange={this.handleChange} placeholder="SEO Commitment ID" />
                                 <br/>
                                 <Button onClick={this.lookupSeoCommitment} variant="success">Search</Button>
