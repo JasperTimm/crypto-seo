@@ -24,6 +24,7 @@ const createRequest = (input, callback) => {
   const term = validator.validated.data.term.toLowerCase()
   const site = new URL(validator.validated.data.site.toLowerCase())
   const domainMatch = validator.validated.data.domainMatch || false
+  // Will look at handling other search engines in the future
   const engine = validator.validated.data.engine || 'google'
 
   googleIt({"query": term}).then(results => {
