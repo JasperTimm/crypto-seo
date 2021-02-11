@@ -6,8 +6,8 @@ import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "@chainlink/contracts/src/v0.6/vendor/Ownable.sol";
 
 contract CryptoSEO is ChainlinkClient, Ownable {
-  uint256 private ORACLE_PAYMENT = 1 * LINK;
-  uint256 private REQUEST_EXPIRY = 1 days;
+  uint256 public ORACLE_PAYMENT = 1 * LINK;
+  uint256 public REQUEST_EXPIRY = 1 days;
   LinkTokenInterface private link;
   
   enum SeoCommitmentStatus { Created, Processing }
@@ -63,10 +63,16 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   address public oracle;
   string public googleSearchJobId;
 
-  constructor(address _oracle, string memory _jobId) public Ownable() {
+  constructor(address _link, address _oracle, string memory _jobId) public Ownable() {
     numSEOCommitments = 0;
-    setPublicChainlinkToken();
+
+    if (_link == address(0)) {
+      setPublicChainlinkToken();
+    } else {
+      setChainlinkToken(_link);
+    }
     link = LinkTokenInterface(chainlinkTokenAddress());
+    
     setOracle(_oracle);
     setGoogleSearchJobId(_jobId);
   }

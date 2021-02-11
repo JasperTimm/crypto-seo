@@ -24,7 +24,6 @@
     "bootstrap": "^4.5.3",
     "child_process": "^1.0.2",
     "css-loader": "^5.0.0",
-    "google": "^2.1.0",
     "json-loader": "^0.5.7",
     "querystring": "^0.2.0",
     "react": "^16.14.0",
@@ -39,6 +38,8 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-class-properties": "^7.12.13",
+    "@chainlink/test-helpers": "0.0.5",
+    "@openzeppelin/test-helpers": "^0.5.10",
     "babel-regenerator-runtime": "^6.5.0",
     "dotenv": "^8.2.0",
     "file-loader": "^6.2.0",
