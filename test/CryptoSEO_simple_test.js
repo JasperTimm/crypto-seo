@@ -4,7 +4,7 @@ const { oracle } = require('@chainlink/test-helpers')
 const { expectRevert, time } = require('@openzeppelin/test-helpers')
 const { web3 } = require('@openzeppelin/test-helpers/src/setup')
 
-contract('CryptoSEO', accounts => {
+contract('CryptoSEO simple', accounts => {
   const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
   const { Oracle } = require('@chainlink/contracts/truffle/v0.6/Oracle')
   const CryptoSEO = artifacts.require('CryptoSEO')

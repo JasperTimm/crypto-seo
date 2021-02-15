@@ -7,7 +7,8 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "NODE_ENV=development npx webpack --watch --progress --mode=development",
+    "test": "NODE_ENV=test npx truffle test --stacktrace-extra"
   },
   "keywords": [],
   "author": "",

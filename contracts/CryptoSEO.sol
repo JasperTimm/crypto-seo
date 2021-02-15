@@ -10,7 +10,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   uint256 public REQUEST_EXPIRY = 1 days;
   LinkTokenInterface private link;
   
-  enum SeoCommitmentStatus { Created, Processing }
+  enum SeoCommitmentStatus { Created, Processing, Completed }
 
   struct SEOCommitment {
     bool isValue;
@@ -138,7 +138,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     return commitmentId;
   }
 
-  function executeSEOCommitment(uint256 commitmentId) public returns (bytes32) {
+  function executeSEOCommitment(uint256 commitmentId) private returns (bytes32) {
     SEOCommitment memory comt = seoCommitmentList[commitmentId];
     require(comt.isValue, "Not a valid commitment ID");
     require(comt.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
@@ -166,17 +166,20 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     return sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
   }
 
-  function resetExpiredRequest(bytes32 _requestId) public {
+  function rerunExpiredRequest(bytes32 _requestId) public {
     SearchRequest memory req = requestMap[_requestId];
     require(req.isValue, "No such request");
-    require(now > req.requestTime + REQUEST_EXPIRY, "Request has not yet expired");
-    delete requestMap[_requestId];
-
     SEOCommitment memory comt = seoCommitmentList[req.commitmentId];
     require(comt.isValue, "No commitment for that requestId");
+    require(comt.status == SeoCommitmentStatus.Processing, "Commitment is not in Processing status");
+    require(now > comt.timeToExecute + REQUEST_EXPIRY, "Request has not yet expired");
 
+    delete requestMap[_requestId];
     comt.status = SeoCommitmentStatus.Created;
     seoCommitmentList[req.commitmentId] = comt;
+
+    executeSEOCommitment(req.commitmentId);
+
     return;
   }
 
@@ -193,29 +196,30 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(req.isValue, "SearchRequest with that requestId doesn't exit");
     delete requestMap[_requestId];
 
-    SEOCommitment memory cont = seoCommitmentList[req.commitmentId];
-    require(cont.isValue, "No commitment found for that commitmentId");
-    require(cont.status == SeoCommitmentStatus.Processing, "Commitment not in processing status");
-    delete seoCommitmentList[req.commitmentId];
+    SEOCommitment memory comt = seoCommitmentList[req.commitmentId];
+    require(comt.isValue, "No commitment found for that commitmentId");
+    require(comt.status == SeoCommitmentStatus.Processing, "Commitment not in processing status");
+    comt.status = SeoCommitmentStatus.Completed;
+    seoCommitmentList[req.commitmentId] = comt;
 
     uint256 payerBal = 0;
     uint256 payeeBal = 0;
-    if (_rank == 0 || _rank > cont.initialSearchRank) {
+    if (_rank == 0 || _rank > comt.initialSearchRank) {
       // Search rank was worse, return funds to payer
-      payerBal = cont.maxPayableEth;
+      payerBal = comt.maxPayableEth;
     } else {
-      uint256 payForRankInc = (cont.initialSearchRank - _rank) * cont.amtPerRankEth;
-      if (payForRankInc > cont.maxPayableEth) {
-        payeeBal = cont.maxPayableEth;
+      uint256 payForRankInc = (comt.initialSearchRank - _rank) * comt.amtPerRankEth;
+      if (payForRankInc > comt.maxPayableEth) {
+        payeeBal = comt.maxPayableEth;
       } else {
-        uint256 refund = cont.maxPayableEth - payForRankInc;
+        uint256 refund = comt.maxPayableEth - payForRankInc;
         payerBal = refund;
         payeeBal = payForRankInc;
       }
     }
 
-    payoutAmt[cont.payer] = payoutAmt[cont.payer] + payerBal;
-    payoutAmt[cont.payee] = payoutAmt[cont.payee] + payeeBal;
+    payoutAmt[comt.payer] = payoutAmt[comt.payer] + payerBal;
+    payoutAmt[comt.payee] = payoutAmt[comt.payee] + payeeBal;
 
     emit PayoutCommitment(req.commitmentId, payerBal, payeeBal);
 
