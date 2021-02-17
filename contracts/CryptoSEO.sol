@@ -122,7 +122,8 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(msg.value == maxPayableEth, "Eth sent didn't match maxPayableEth");
     require(amtPerRankEth > 0, "amtPerRankEth must be greater than zero");
     require(maxPayableEth >= amtPerRankEth, "maxPayableEth must be larger than or equal to amtPerRankEth");
-    require(initialSearchRank > 0, "initialSearchRank must be non-zero");
+    require(initialSearchRank > 0, "initialSearchRank must be greater than zero");
+    require(timeToExecute > now, "timeToExecute must be in the future");
     require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
 
     SEOCommitment memory comt = SEOCommitment(true, domainMatch, site, searchTerm, initialSearchRank,
@@ -173,6 +174,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(comt.isValue, "No commitment for that requestId");
     require(comt.status == SeoCommitmentStatus.Processing, "Commitment is not in Processing status");
     require(now > comt.timeToExecute + REQUEST_EXPIRY, "Request has not yet expired");
+    require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
 
     delete requestMap[_requestId];
     comt.status = SeoCommitmentStatus.Created;

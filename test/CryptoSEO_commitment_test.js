@@ -4,6 +4,8 @@ const { oracle } = require('@chainlink/test-helpers')
 const { expectRevert, time } = require('@openzeppelin/test-helpers')
 const { web3 } = require('@openzeppelin/test-helpers/src/setup')
 
+const statusCodes = ["Created", "Processing", "Completed"]
+
 contract('CryptoSEO commitment', accounts => {
   const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
   const { Oracle } = require('@chainlink/contracts/truffle/v0.6/Oracle')
@@ -66,19 +68,103 @@ contract('CryptoSEO commitment', accounts => {
 
     context('when called with a valid commitment', () => {
       it('creates the commitment', async () => {
-        await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+        let result = await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
           validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
             from: defaultAccount,
             value: validCommitment.maxPayableEth
           })
         let newCommitment = await cc.seoCommitmentList(0)
         assert.equal(newCommitment.isValue, true)
+        assert.equal(newCommitment.status, statusCodes.indexOf("Processing"))        
+        assert.equal(newCommitment.domainMatch, validCommitment.domainMatch)
+        assert.equal(newCommitment.site, validCommitment.site)
+        assert.equal(newCommitment.searchTerm, validCommitment.searchTerm)
+        assert.equal(newCommitment.initialSearchRank, validCommitment.initialSearchRank)
+        assert.equal(newCommitment.amtPerRankEth, validCommitment.amtPerRankEth)
+        assert.equal(newCommitment.maxPayableEth, validCommitment.maxPayableEth)
+        assert.equal(newCommitment.timeToExecute, validCommitment.timeToExecute)
+        assert.equal(newCommitment.payee, validCommitment.payee)
+        assert.equal(newCommitment.payer, defaultAccount)
+
+        // TODO: For now we check the LINK is transferred to the Oracle
+        // but the Oracle should then transfer to the Chainlink node itself
+        let ocLINKBal = await link.balanceOf(oc.address)
+        assert.equal(String(ocLINKBal), String(initOraclePayment))
+
+        let numSEOCommitments = await cc.numSEOCommitments()
+        assert.equal(numSEOCommitments, 1)
+
+        let events = await cc.getPastEvents('SEOCommitmentCreated')
+        let creationEvent = events[0]
+        assert.equal(creationEvent.event, "SEOCommitmentCreated")
+        assert.equal(creationEvent.returnValues.commitmentId, 0)
+        assert.equal(creationEvent.returnValues.site, validCommitment.site)
+        assert.equal(creationEvent.returnValues.searchTerm, validCommitment.searchTerm)
+      })
+    })
+
+    context('when called with initialSearchRank set to 0', () => {
+      it('fails to create the commitment', async () => {
+        await expectRevert(cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, 0,
+          validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
+            from: defaultAccount,
+            value: validCommitment.maxPayableEth
+          }), "initialSearchRank must be greater than zero")
+      })
+    })
+
+    context('when called with amtPerRankEth set to 0', () => {
+      it('fails to create the commitment', async () => {
+        await expectRevert(cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+          0, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
+            from: defaultAccount,
+            value: validCommitment.maxPayableEth
+          }), "amtPerRankEth must be greater than zero")
+      })
+    })
+
+    context('when called with maxPayableEth less than amtPerRankEth', () => {
+      it('fails to create the commitment', async () => {
+        await expectRevert(cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+          validCommitment.maxPayableEth, validCommitment.amtPerRankEth, validCommitment.timeToExecute, validCommitment.payee, {
+            from: defaultAccount,
+            value: validCommitment.amtPerRankEth
+          }), "maxPayableEth must be larger than or equal to amtPerRankEth")
+      })
+    })
+
+    context('when called with insufficient eth', () => {
+      it('fails to create the commitment', async () => {
+        await expectRevert(cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+          validCommitment.maxPayableEth, validCommitment.amtPerRankEth, validCommitment.timeToExecute, validCommitment.payee, {
+            from: defaultAccount,
+          }), "Eth sent didn't match maxPayableEth")
+      })
+    })
+ 
+    context('when called with timeToExecute in the past', () => {
+      it('fails to create the commitment', async () => {
+        await expectRevert(cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+          validCommitment.amtPerRankEth, validCommitment.maxPayableEth, Math.floor(Date.now() / 1000) - 10, validCommitment.payee, {
+            from: defaultAccount,
+            value: validCommitment.maxPayableEth
+          }), "timeToExecute must be in the future")
       })
     })
 
   })
 
-
+  describe('#createSEOCommitment without LINK approval', () => {
+    context('when called without having approved LINK', () => {
+      it('fails to create the commitment', async () => {
+        await expectRevert(cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+          validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
+            from: defaultAccount,
+            value: validCommitment.maxPayableEth
+          }), "Error: Revert or exceptional halt")
+      })
+    })
+  })
 
 
 })
