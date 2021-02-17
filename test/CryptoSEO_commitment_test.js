@@ -34,7 +34,7 @@ contract('CryptoSEO commitment', accounts => {
   const zeroAddr = '0x0000000000000000000000000000000000000000'
   const searchJobId = "000"
   const newJobId = "001"
-  const initReqExpiry = 60 * 60 * 24 // (1 day)
+  const initReqExpiry = 60 * 60 // (1 hour)
   const initOraclePayment = 10 ** 18
   const payment = web3.utils.toWei('1', 'ether')
   var BN = web3.utils.BN
@@ -61,6 +61,7 @@ contract('CryptoSEO commitment', accounts => {
     })
   })
 
+  
   describe('#createSEOCommitment', () => {
     beforeEach(async () => {
       await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
@@ -68,7 +69,7 @@ contract('CryptoSEO commitment', accounts => {
 
     context('when called with a valid commitment', () => {
       it('creates the commitment', async () => {
-        let result = await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+        await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
           validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
             from: defaultAccount,
             value: validCommitment.maxPayableEth
@@ -94,8 +95,7 @@ contract('CryptoSEO commitment', accounts => {
         let numSEOCommitments = await cc.numSEOCommitments()
         assert.equal(numSEOCommitments, 1)
 
-        let events = await cc.getPastEvents('SEOCommitmentCreated')
-        let creationEvent = events[0]
+        let creationEvent = (await cc.getPastEvents('SEOCommitmentCreated'))[0]
         assert.equal(creationEvent.event, "SEOCommitmentCreated")
         assert.equal(creationEvent.returnValues.commitmentId, 0)
         assert.equal(creationEvent.returnValues.site, validCommitment.site)
@@ -166,5 +166,98 @@ contract('CryptoSEO commitment', accounts => {
     })
   })
 
+  describe('#executeSEOCommitment', () => {
+    beforeEach(async () => {
+      await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
+      await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+        validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
+          from: defaultAccount,
+          value: validCommitment.maxPayableEth
+        })      
+    })
+
+    context('when called with a valid commitment', () => {
+      it('executes the commitment', async () => {
+        let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
+        assert.equal(requestEvent.returnValues.commitmentId, 0)
+        assert.equal(requestEvent.returnValues.timeToExecute, validCommitment.timeToExecute)
+
+        let reqId = requestEvent.returnValues.requestId
+        assert.equal(reqId.length, 66)
+        assert.equal(reqId.startsWith("0x"), true)
+
+        let searchReq = await cc.requestMap(reqId)
+        assert.equal(searchReq.isValue, true)
+        assert.equal(searchReq.commitmentId, 0)
+        assert.equal(searchReq.timeToExecute, validCommitment.timeToExecute)
+      })
+    })
+  })
+
+
+  describe('#rerunExpiredRequest', () => {
+    beforeEach(async () => {
+      let updatedTimeToExecute = (await time.latest()).add(new BN(60 * 60 * 24 * 30)) // Need to keep this updated relative to latest block as we increase time in tests
+      await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
+      await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+        validCommitment.amtPerRankEth, validCommitment.maxPayableEth, String(updatedTimeToExecute), validCommitment.payee, {
+          from: defaultAccount,
+          value: validCommitment.maxPayableEth
+        })      
+    })
+
+    context('when called with an expired request id', () => {
+      it('executes the commitment again', async () => {
+        let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
+        let reqId = requestEvent.returnValues.requestId
+        let reqTimeToExecute = requestEvent.returnValues.timeToExecute
+        await time.increase((60 * 60 * 24 * 31))
+        await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
+        await cc.rerunExpiredRequest(reqId)
+
+        let searchReq = await cc.requestMap(reqId)
+        assert.equal(searchReq.isValue, false)
+
+        requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
+        assert.equal(requestEvent.returnValues.commitmentId, 0)
+        assert.equal(requestEvent.returnValues.timeToExecute, reqTimeToExecute)
+
+        reqId = requestEvent.returnValues.requestId
+        assert.equal(reqId.length, 66)
+        assert.equal(reqId.startsWith("0x"), true)
+
+        searchReq = await cc.requestMap(reqId)
+        assert.equal(searchReq.isValue, true)
+        assert.equal(searchReq.commitmentId, 0)
+        assert.equal(searchReq.timeToExecute, reqTimeToExecute)        
+      })
+    })
+
+
+    context('when called with an invalid request id', () => {
+      it('fails to rerun the commitment', async () => {
+        await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
+        await expectRevert(cc.rerunExpiredRequest(zeroAddr), "No such request")
+      })
+    })
+
+    context('when called with a request which has not expired', () => {
+      it('fails to rerun the commitment', async () => {
+        let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
+        let reqId = requestEvent.returnValues.requestId
+        await expectRevert(cc.rerunExpiredRequest(reqId), "Request has not yet expired")
+      })
+    })    
+
+    context('when called without having approved a LINK transfer', () => {
+      it('fails to rerun the commitment', async () => {
+        let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
+        let reqId = requestEvent.returnValues.requestId
+        await time.increase((60 * 60 * 24 * 31))
+        await expectRevert(cc.rerunExpiredRequest(reqId), "Error: Revert or exceptional halt")
+      })
+    })
+
+  })
 
 })

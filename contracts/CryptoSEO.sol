@@ -7,7 +7,7 @@ import "@chainlink/contracts/src/v0.6/vendor/Ownable.sol";
 
 contract CryptoSEO is ChainlinkClient, Ownable {
   uint256 public ORACLE_PAYMENT = 1 * LINK;
-  uint256 public REQUEST_EXPIRY = 1 days;
+  uint256 public REQUEST_EXPIRY = 1 hours;
   LinkTokenInterface private link;
   
   enum SeoCommitmentStatus { Created, Processing, Completed }
@@ -29,7 +29,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   struct SearchRequest {
     bool isValue;
     uint256 commitmentId;
-    uint256 requestTime;
+    uint256 timeToExecute;
   }
 
   event SEOCommitmentCreated(
@@ -145,7 +145,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(comt.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
 
     bytes32 requestId = requestGoogleSearch(comt, this.fulfillCommitment.selector);
-    requestMap[requestId] = SearchRequest(true, commitmentId, now);
+    requestMap[requestId] = SearchRequest(true, commitmentId, comt.timeToExecute);
 
     comt.status = SeoCommitmentStatus.Processing;
     seoCommitmentList[commitmentId] = comt;
