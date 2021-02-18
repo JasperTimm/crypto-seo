@@ -212,8 +212,8 @@ contract('CryptoSEO commitment fulfillment', accounts => {
         const receipt = await cc.withdrawPayout({from: defaultAccount})
         const afterBal = new BN(await web3.eth.getBalance(defaultAccount))
 
-        const tx = await web3.eth.getTransaction(receipt.transactionHash)
-        const txCost = new BN(tx.gasPrice * receipt.cumulativeGasUsed)
+        const tx = await web3.eth.getTransaction(receipt.tx)
+        const txCost = new BN(tx.gasPrice * receipt.receipt.cumulativeGasUsed)
 
         assert.equal(afterBal.toString(), beforeBal.add(payout).sub(txCost).toString())        
       })
