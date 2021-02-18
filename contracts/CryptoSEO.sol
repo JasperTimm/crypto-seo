@@ -206,8 +206,8 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
     uint256 payerBal = 0;
     uint256 payeeBal = 0;
-    if (_rank == 0 || _rank > comt.initialSearchRank) {
-      // Search rank was worse, return funds to payer
+    if (_rank == 0 || _rank >= comt.initialSearchRank) {
+      // Search rank was not better, return funds to payer
       payerBal = comt.maxPayableEth;
     } else {
       uint256 payForRankInc = (comt.initialSearchRank - _rank) * comt.amtPerRankEth;
