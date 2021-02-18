@@ -133,11 +133,11 @@ contract('CryptoSEO commitment creation', accounts => {
   describe('#createSEOCommitment without LINK approval', () => {
     context('when called without having approved LINK', () => {
       it('fails to create the commitment', async () => {
-        await expectRevert(cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+        await expectRevert.unspecified(cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
           validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
             from: defaultAccount,
             value: validCommitment.maxPayableEth
-          }), "Error: Revert or exceptional halt")
+          }))
       })
     })
   })

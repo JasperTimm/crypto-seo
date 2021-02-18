@@ -97,7 +97,7 @@ contract('CryptoSEO rerun', accounts => {
         let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
         let reqId = requestEvent.returnValues.requestId
         await time.increase((60 * 60 * 24 * 31))
-        await expectRevert(cc.rerunExpiredRequest(reqId), "Error: Revert or exceptional halt")
+        await expectRevert.unspecified(cc.rerunExpiredRequest(reqId))
       })
     })
 
