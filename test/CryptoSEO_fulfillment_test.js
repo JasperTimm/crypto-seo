@@ -1,7 +1,5 @@
 
-/* eslint-disable @typescript-eslint/no-var-requires */
-const { oracle } = require('@chainlink/test-helpers')
-const { expectRevert, time } = require('@openzeppelin/test-helpers')
+const { expectRevert } = require('@openzeppelin/test-helpers')
 const { web3 } = require('@openzeppelin/test-helpers/src/setup')
 
 const statusCodes = ["Created", "Processing", "Completed"]
@@ -25,30 +23,10 @@ contract('CryptoSEO commitment fulfillment', accounts => {
     maxPayableEth: web3.utils.toWei('0.01', 'ether'), // in Wei
     timeToExecute: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 30), // Will execute a month from now
     payee: stranger,
-
-    // payer: consumer,
-    // isValue: true,
-    // status: 0
   }
 
-  const zeroAddr = '0x0000000000000000000000000000000000000000'
-  const searchJobId = "000"
-  const newJobId = "001"
-  const initReqExpiry = 60 * 60 // (1 hour)
   const initOraclePayment = 10 ** 18
-  const payment = web3.utils.toWei('1', 'ether')
   var BN = web3.utils.BN
-
-  // These parameters are used to validate the data was received
-  // on the deployed oracle contract. The Job ID only represents
-  // the type of data, but will not work on a public testnet.
-  // For the latest JobIDs, visit a node listing service like:
-  // https://market.link/
-  const jobId = web3.utils.toHex('4c7b7ffb66b344fbaa64995af81e355a')
-  const url =
-    'https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD,EUR,JPY'
-  const path = 'USD'
-  const times = 100
 
   let link, oc, cc, reqEvt
 
