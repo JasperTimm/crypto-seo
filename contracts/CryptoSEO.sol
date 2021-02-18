@@ -6,11 +6,11 @@ import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "@chainlink/contracts/src/v0.6/vendor/Ownable.sol";
 
 contract CryptoSEO is ChainlinkClient, Ownable {
-  uint256 private ORACLE_PAYMENT = 1 * LINK;
-  uint256 private REQUEST_EXPIRY = 1 days;
+  uint256 public ORACLE_PAYMENT = 1 * LINK;
+  uint256 public REQUEST_EXPIRY = 1 hours;
   LinkTokenInterface private link;
   
-  enum SeoCommitmentStatus { Created, Processing }
+  enum SeoCommitmentStatus { Created, Processing, Completed }
 
   struct SEOCommitment {
     bool isValue;
@@ -29,7 +29,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   struct SearchRequest {
     bool isValue;
     uint256 commitmentId;
-    uint256 requestTime;
+    uint256 timeToExecute;
   }
 
   event SEOCommitmentCreated(
@@ -63,10 +63,16 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   address public oracle;
   string public googleSearchJobId;
 
-  constructor(address _oracle, string memory _jobId) public Ownable() {
+  constructor(address _link, address _oracle, string memory _jobId) public Ownable() {
     numSEOCommitments = 0;
-    setPublicChainlinkToken();
+
+    if (_link == address(0)) {
+      setPublicChainlinkToken();
+    } else {
+      setChainlinkToken(_link);
+    }
     link = LinkTokenInterface(chainlinkTokenAddress());
+    
     setOracle(_oracle);
     setGoogleSearchJobId(_jobId);
   }
@@ -116,7 +122,8 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(msg.value == maxPayableEth, "Eth sent didn't match maxPayableEth");
     require(amtPerRankEth > 0, "amtPerRankEth must be greater than zero");
     require(maxPayableEth >= amtPerRankEth, "maxPayableEth must be larger than or equal to amtPerRankEth");
-    require(initialSearchRank > 0, "initialSearchRank must be non-zero");
+    require(initialSearchRank > 0, "initialSearchRank must be greater than zero");
+    require(timeToExecute > now, "timeToExecute must be in the future");
     require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
 
     SEOCommitment memory comt = SEOCommitment(true, domainMatch, site, searchTerm, initialSearchRank,
@@ -132,13 +139,13 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     return commitmentId;
   }
 
-  function executeSEOCommitment(uint256 commitmentId) public returns (bytes32) {
+  function executeSEOCommitment(uint256 commitmentId) private returns (bytes32) {
     SEOCommitment memory comt = seoCommitmentList[commitmentId];
     require(comt.isValue, "Not a valid commitment ID");
     require(comt.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
 
     bytes32 requestId = requestGoogleSearch(comt, this.fulfillCommitment.selector);
-    requestMap[requestId] = SearchRequest(true, commitmentId, now);
+    requestMap[requestId] = SearchRequest(true, commitmentId, comt.timeToExecute);
 
     comt.status = SeoCommitmentStatus.Processing;
     seoCommitmentList[commitmentId] = comt;
@@ -160,17 +167,21 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     return sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
   }
 
-  function resetExpiredRequest(bytes32 _requestId) public {
+  function rerunExpiredRequest(bytes32 _requestId) public {
     SearchRequest memory req = requestMap[_requestId];
     require(req.isValue, "No such request");
-    require(now > req.requestTime + REQUEST_EXPIRY, "Request has not yet expired");
-    delete requestMap[_requestId];
-
     SEOCommitment memory comt = seoCommitmentList[req.commitmentId];
     require(comt.isValue, "No commitment for that requestId");
+    require(comt.status == SeoCommitmentStatus.Processing, "Commitment is not in Processing status");
+    require(now > comt.timeToExecute + REQUEST_EXPIRY, "Request has not yet expired");
+    require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
 
+    delete requestMap[_requestId];
     comt.status = SeoCommitmentStatus.Created;
     seoCommitmentList[req.commitmentId] = comt;
+
+    executeSEOCommitment(req.commitmentId);
+
     return;
   }
 
@@ -187,29 +198,30 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(req.isValue, "SearchRequest with that requestId doesn't exit");
     delete requestMap[_requestId];
 
-    SEOCommitment memory cont = seoCommitmentList[req.commitmentId];
-    require(cont.isValue, "No commitment found for that commitmentId");
-    require(cont.status == SeoCommitmentStatus.Processing, "Commitment not in processing status");
-    delete seoCommitmentList[req.commitmentId];
+    SEOCommitment memory comt = seoCommitmentList[req.commitmentId];
+    require(comt.isValue, "No commitment found for that commitmentId");
+    require(comt.status == SeoCommitmentStatus.Processing, "Commitment not in processing status");
+    comt.status = SeoCommitmentStatus.Completed;
+    seoCommitmentList[req.commitmentId] = comt;
 
     uint256 payerBal = 0;
     uint256 payeeBal = 0;
-    if (_rank == 0 || _rank > cont.initialSearchRank) {
-      // Search rank was worse, return funds to payer
-      payerBal = cont.maxPayableEth;
+    if (_rank == 0 || _rank >= comt.initialSearchRank) {
+      // Search rank was not better, return funds to payer
+      payerBal = comt.maxPayableEth;
     } else {
-      uint256 payForRankInc = (cont.initialSearchRank - _rank) * cont.amtPerRankEth;
-      if (payForRankInc > cont.maxPayableEth) {
-        payeeBal = cont.maxPayableEth;
+      uint256 payForRankInc = (comt.initialSearchRank - _rank) * comt.amtPerRankEth;
+      if (payForRankInc > comt.maxPayableEth) {
+        payeeBal = comt.maxPayableEth;
       } else {
-        uint256 refund = cont.maxPayableEth - payForRankInc;
+        uint256 refund = comt.maxPayableEth - payForRankInc;
         payerBal = refund;
         payeeBal = payForRankInc;
       }
     }
 
-    payoutAmt[cont.payer] = payoutAmt[cont.payer] + payerBal;
-    payoutAmt[cont.payee] = payoutAmt[cont.payee] + payeeBal;
+    payoutAmt[comt.payer] = payoutAmt[comt.payer] + payerBal;
+    payoutAmt[comt.payee] = payoutAmt[comt.payee] + payeeBal;
 
     emit PayoutCommitment(req.commitmentId, payerBal, payeeBal);
 

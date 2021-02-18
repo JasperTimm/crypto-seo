@@ -6,10 +6,9 @@ describe('createRequest', () => {
 
   context('successful calls', () => {
     const requests = [
-      { name: 'id not supplied', testData: { data: { base: 'ETH', quote: 'USD' } } },
-      { name: 'base/quote', testData: { id: jobID, data: { base: 'ETH', quote: 'USD' } } },
-      { name: 'from/to', testData: { id: jobID, data: { from: 'ETH', to: 'USD' } } },
-      { name: 'coin/market', testData: { id: jobID, data: { coin: 'ETH', market: 'USD' } } }
+      { name: 'id not supplied', testData: { data: { site: 'https://github.com', term: 'github' } } },
+      { name: 'site term', testData: { id: jobID, data: { site: 'https://github.com', term: 'github' } } }
+
     ]
 
     requests.forEach(req => {
@@ -30,16 +29,14 @@ describe('createRequest', () => {
     const requests = [
       { name: 'empty body', testData: {} },
       { name: 'empty data', testData: { data: {} } },
-      { name: 'base not supplied', testData: { id: jobID, data: { quote: 'USD' } } },
-      { name: 'quote not supplied', testData: { id: jobID, data: { base: 'ETH' } } },
-      { name: 'unknown base', testData: { id: jobID, data: { base: 'not_real', quote: 'USD' } } },
-      { name: 'unknown quote', testData: { id: jobID, data: { base: 'ETH', quote: 'not_real' } } }
+      { name: 'site not supplied', testData: { id: jobID, data: { term: 'github' } } },
+      { name: 'term not supplied', testData: { id: jobID, data: { site: 'https://github.com' } } }
     ]
 
     requests.forEach(req => {
       it(`${req.name}`, (done) => {
         createRequest(req.testData, (statusCode, data) => {
-          assert.equal(statusCode, 500)
+          assert.equal(statusCode, 400)
           assert.equal(data.jobRunID, jobID)
           assert.equal(data.status, 'errored')
           assert.isNotEmpty(data.error)

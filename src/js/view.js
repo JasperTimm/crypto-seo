@@ -2,7 +2,7 @@
 import React, { Component } from 'react'
 import { Container, Form, Card, Button, Table, Col } from 'react-bootstrap'
 
-let statusCodes = ["Created", "Processing"]
+const statusCodes = ["Created", "Processing", "Completed"]
 
 export default class View extends Component {
     constructor(props) {
