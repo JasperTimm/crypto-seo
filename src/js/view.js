@@ -27,51 +27,45 @@ export default class View extends Component {
         this.setState({...this.state, [evt.target.name]: value})
     }
 
-    lookupSeoCommitment = () => {
+    lookupSeoCommitment = async () => {
         this.setState({seoCommitment: null})
         let id = parseInt(this.state.seoCommitmentId)
-        if (!isNaN(id)) {
-            this.getEth().CryptoSEOContract.methods.seoCommitmentList(id).call(
-                {from: this.getEth().currentAccount})
-                .then((resp) => {
-                let commitment = {}
-                Object.keys(resp)
-                    .filter((key) => isNaN(parseInt(key)))
-                    .forEach((key) => commitment[key] = resp[key])
-            
-                this.setState({
-                    seoCommitment: commitment
-                })
-                })
-        }
+        if (isNaN(id)) return
+
+        let resp = await this.getEth().CryptoSEOContract.methods.seoCommitmentList(id).call(
+            {from: this.getEth().currentAccount})
+
+        let commitment = {}
+        Object.keys(resp)
+            .filter((key) => isNaN(parseInt(key)))
+            .forEach((key) => commitment[key] = resp[key])
+    
+        this.setState({
+            seoCommitment: commitment
+        })
     }
 
     displaySEOCommitment = () => {
-        if (!this.state.seoCommitment.isValue) {
-            return (
-                <Form>No SEO Commitment found for that ID</Form>
-            )
-        } else {
-            return (
-                <Table bordered hover size="sm">
-                    <tbody>
-                        <tr key="seoCommitmentId">
-                            <td><b>seoCommitmentId</b></td>
-                            <td>{this.state.seoCommitmentId}</td>
-                        </tr>
-                        {Object.keys(this.state.seoCommitment).filter((k) => k != "isValue").map((field) => {
-                            let val = this.state.seoCommitment[field]
-                            return (
-                                <tr key={field}>
-                                    <td><b>{field}</b></td>
-                                    <td>{this.displayVal(field, val)}</td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </Table>
-            )
-        }
+        if (!this.state.seoCommitment.isValue) return (<Form>No SEO Commitment found for that ID</Form>)
+        return (
+            <Table bordered hover size="sm">
+                <tbody>
+                    <tr key="seoCommitmentId">
+                        <td><b>seoCommitmentId</b></td>
+                        <td>{this.state.seoCommitmentId}</td>
+                    </tr>
+                    {Object.keys(this.state.seoCommitment).filter((k) => k != "isValue").map((field) => {
+                        let val = this.state.seoCommitment[field]
+                        return (
+                            <tr key={field}>
+                                <td><b>{field}</b></td>
+                                <td>{this.displayVal(field, val)}</td>
+                            </tr>
+                        )
+                    })}
+                </tbody>
+            </Table>
+        )
     }
 
     displayVal = (field, val) => {
@@ -89,9 +83,8 @@ export default class View extends Component {
         }
     }
   
-    render(){
-      return (
-        <Container fluid="xl">
+    displaySearch = () => {
+        return (
             <Card>
                 <Card.Header>Search</Card.Header>
                 <Card.Body>
@@ -107,15 +100,60 @@ export default class View extends Component {
                     }
                 </Card.Body>
             </Card>
-            {!this.state.seoCommitment 
-                ?   <></> 
-                :   <Card>
-                        <Card.Header>SEO Commitment</Card.Header>
-                        <Card.Body>
-                            {this.displaySEOCommitment()}                       
-                        </Card.Body>
-                    </Card>
-            }
+        )
+    }
+
+    displayCommitment = () => {
+        if (!this.state.seoCommitment) return (<></>)
+        return (
+            <>
+                <Card>
+                    <Card.Header>SEO Commitment</Card.Header>
+                    <Card.Body>
+                        {this.displaySEOCommitment()}
+                    </Card.Body>
+                </Card>
+                {this.displayRerun()}
+                {this.displayWithdraw()}
+            </>
+        )
+    }
+
+    displayRerun = () => {
+        if (this.canRerun()) {
+            return (
+                <Card>
+                    <Card.Header>Rerun expired request</Card.Header>
+                    <Card.Body>
+                        It appears the 
+                    </Card.Body>
+                </Card>
+            )            
+        } else {
+            return (<></>)
+        }
+    }
+
+    canRerun = () => {
+        return true
+    }
+
+    displayWithdraw = () => {
+        return (
+            <Card>
+                <Card.Header>Withdraw payout</Card.Header>
+                <Card.Body>
+                    It appears this commitment has expired. In order to rer
+                </Card.Body>
+            </Card>
+        ) 
+    }
+
+    render(){
+      return (
+        <Container fluid="xl">
+            {this.displaySearch()}
+            {this.displayCommitment()}
         </Container>
       )
     }
