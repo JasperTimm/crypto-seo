@@ -38,7 +38,7 @@ contract('CryptoSEO rerun', accounts => {
     })
   })
 
-  describe('#rerunExpiredRequest', () => {
+  describe('#rerunExpiredCommitment', () => {
     beforeEach(async () => {
       let updatedTimeToExecute = (await time.latest()).add(new BN(60 * 60 * 24 * 30)) // Need to keep this updated relative to latest block as we increase time in tests
       await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
@@ -49,21 +49,19 @@ contract('CryptoSEO rerun', accounts => {
         })      
     })
 
-    context('when called with an expired request id', () => {
+    context('when called with an expired commitment id', () => {
       it('executes the commitment again', async () => {
         let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
         let reqId = requestEvent.returnValues.requestId
-        let reqTimeToExecute = requestEvent.returnValues.timeToExecute
         await time.increase((60 * 60 * 24 * 31))
         await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
-        await cc.rerunExpiredRequest(reqId)
+        await cc.rerunExpiredCommitment(0)
 
         let searchReq = await cc.requestMap(reqId)
         assert.equal(searchReq.isValue, false)
 
         requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
         assert.equal(requestEvent.returnValues.commitmentId, 0)
-        assert.equal(requestEvent.returnValues.timeToExecute, reqTimeToExecute)
 
         reqId = requestEvent.returnValues.requestId
         assert.equal(reqId.length, 66)
@@ -72,32 +70,26 @@ contract('CryptoSEO rerun', accounts => {
         searchReq = await cc.requestMap(reqId)
         assert.equal(searchReq.isValue, true)
         assert.equal(searchReq.commitmentId, 0)
-        assert.equal(searchReq.timeToExecute, reqTimeToExecute)        
       })
     })
 
-
-    context('when called with an invalid request id', () => {
+    context('when called with an invalid commitment id', () => {
       it('fails to rerun the commitment', async () => {
         await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
-        await expectRevert(cc.rerunExpiredRequest(zeroAddr), "No such request")
+        await expectRevert(cc.rerunExpiredCommitment(50), "No commitment for that commitmentId")
       })
     })
 
-    context('when called with a request which has not expired', () => {
+    context('when called with a commitment which has not expired', () => {
       it('fails to rerun the commitment', async () => {
-        let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
-        let reqId = requestEvent.returnValues.requestId
-        await expectRevert(cc.rerunExpiredRequest(reqId), "Request has not yet expired")
+        await expectRevert(cc.rerunExpiredCommitment(0), "Commitment has not yet expired")
       })
     })    
 
     context('when called without having approved a LINK transfer', () => {
       it('fails to rerun the commitment', async () => {
-        let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
-        let reqId = requestEvent.returnValues.requestId
         await time.increase((60 * 60 * 24 * 31))
-        await expectRevert.unspecified(cc.rerunExpiredRequest(reqId))
+        await expectRevert.unspecified(cc.rerunExpiredCommitment(0))
       })
     })
 
