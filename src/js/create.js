@@ -172,13 +172,13 @@ export default class Create extends Component {
 
      createCommitment = () => {
        let timeNow = Math.floor(Date.now() / 1000)
-       let expiryTime = 0
+       let timeToExecute = 0
        if (this.state.durationUnits == "Minutes") {
-         expiryTime = timeNow + this.state.durationAmt * 60
+        timeToExecute = timeNow + this.state.durationAmt * 60
        } else if (this.state.durationUnits == "Hours") {
-         expiryTime = timeNow + this.state.durationAmt * 60 * 60
+        timeToExecute = timeNow + this.state.durationAmt * 60 * 60
        } else if (this.state.durationUnits == "Days") {
-         expiryTime = timeNow + this.state.durationAmt * 60 * 60 * 24
+        timeToExecute = timeNow + this.state.durationAmt * 60 * 60 * 24
        } else {
          console.error("Unknown unit type")
          return
@@ -191,7 +191,7 @@ export default class Create extends Component {
          initialSearchRank: parseInt(this.state.initialSearchRank),
          amtPerRankEth: this.web3.utils.toWei(this.state.amtPerRankEth, "ether"),
          maxAmtEth: this.web3.utils.toWei(this.state.maxAmtEth, "ether"),
-         expiryTime: expiryTime,
+         timeToExecute: timeToExecute,
          payee: this.state.payee
        }
  
@@ -241,7 +241,7 @@ export default class Create extends Component {
       }
        
        this.getEth().CryptoSEOContract.methods.createSEOCommitment(callObj.site, callObj.searchTerm, callObj.domainMatch,
-         callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.expiryTime, callObj.payee).send( 
+         callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.timeToExecute, callObj.payee).send( 
          {value: callObj.maxAmtEth, from: this.getEth().currentAccount})
          .once('transactionHash', onWaiting)
          .on('error', onError)

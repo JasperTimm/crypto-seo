@@ -9,7 +9,9 @@ export default class View extends Component {
       super(props)
       this.state = {
         seoCommitmentId: props.opt ? props.opt.seoCommitmentId : null,
-        seoCommitment: null
+        seoCommitment: null,
+        hasExpired: false,
+        curPayout: 0
       }
 
       this.web3 = props.web3
@@ -41,8 +43,21 @@ export default class View extends Component {
             .forEach((key) => commitment[key] = resp[key])
     
         this.setState({
+            hasExpired: await this.hasExpired(resp),
+            curPayout: await this.curPayout(),
             seoCommitment: commitment
         })
+    }
+
+    hasExpired = async (comt) => {
+        let timeNow = Math.floor(Date.now() / 1000)
+        let REQ_EXP = await this.getEth().CryptoSEOContract.methods.REQUEST_EXPIRY().call()
+        return comt.status == statusCodes.indexOf('Processing') && timeNow > comt.timeToExecute + REQ_EXP
+    }
+
+    curPayout = async () => {
+        let amt = await this.getEth().CryptoSEOContract.methods.payoutAmt(this.getEth().currentAccount).call()
+        return amt
     }
 
     displaySEOCommitment = () => {
@@ -120,33 +135,39 @@ export default class View extends Component {
     }
 
     displayRerun = () => {
-        if (this.canRerun()) {
-            return (
-                <Card>
-                    <Card.Header>Rerun expired request</Card.Header>
-                    <Card.Body>
-                        It appears the 
-                    </Card.Body>
-                </Card>
-            )            
-        } else {
-            return (<></>)
-        }
+        // if (!this.state.hasExpired) return (<></>)
+        return (
+            <Card>
+                <Card.Header>Expired commitment</Card.Header>
+                <Card.Body>
+                    It appears this commitment is taking longer than expected to execute. In order to rerun this commitment please click the button below.
+                    <br/><br/>
+                    <Button variant="primary" onClick={this.rerunCommitment}>Rerun</Button>
+                </Card.Body>
+            </Card>
+        )            
     }
 
-    canRerun = () => {
-        return true
+    rerunCommitment = () => {
+        console.log("Rerunning...")
     }
 
     displayWithdraw = () => {
+        // if (this.state.curPayout == 0) return (<></>)
         return (
             <Card>
                 <Card.Header>Withdraw payout</Card.Header>
                 <Card.Body>
-                    It appears this commitment has expired. In order to rer
+                    You have <b>{this.web3.utils.fromWei(this.state.curPayout)} ETH</b> to withdraw from this contract.
+                    <br/><br/>
+                    <Button variant="primary" onClick={this.rerunCommitment}>Withdraw</Button>
                 </Card.Body>
             </Card>
         ) 
+    }
+
+    withdrawPayout = () => {
+        console.log("Withdrawing payout...")
     }
 
     render(){
