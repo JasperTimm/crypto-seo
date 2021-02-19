@@ -150,6 +150,7 @@ export default class View extends Component {
 
     rerunCommitment = () => {
         console.log("Rerunning...")
+        //TODO: rerun commitment and refresh page
     }
 
     displayWithdraw = () => {
@@ -160,14 +161,15 @@ export default class View extends Component {
                 <Card.Body>
                     You have <b>{this.web3.utils.fromWei(this.state.curPayout)} ETH</b> to withdraw from this contract.
                     <br/><br/>
-                    <Button variant="primary" onClick={this.rerunCommitment}>Withdraw</Button>
+                    <Button variant="primary" onClick={this.withdrawPayout}>Withdraw</Button>
                 </Card.Body>
             </Card>
         ) 
     }
 
     withdrawPayout = () => {
-        console.log("Withdrawing payout...")
+        this.getEth().CryptoSEOContract.methods.withdrawPayout().send({from: this.getEth().currentAccount})
+        //TODO: refresh the page after the transaction is confirmed
     }
 
     render(){
