@@ -23,13 +23,13 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     uint256 timeToExecute; // in secs since Epoch
     address payable payee;
     address payable payer;
+    bytes32 requestId;
     SeoCommitmentStatus status;
   }
 
   struct SearchRequest {
     bool isValue;
     uint256 commitmentId;
-    uint256 timeToExecute;
   }
 
   event SEOCommitmentCreated(
@@ -127,7 +127,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
 
     SEOCommitment memory comt = SEOCommitment(true, domainMatch, site, searchTerm, initialSearchRank,
-      amtPerRankEth, maxPayableEth, timeToExecute, payee, msg.sender, SeoCommitmentStatus.Created);
+      amtPerRankEth, maxPayableEth, timeToExecute, payee, msg.sender, 0, SeoCommitmentStatus.Created);
     uint commitmentId = numSEOCommitments;
     seoCommitmentList[commitmentId] = comt;
     numSEOCommitments++;
@@ -139,20 +139,21 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     return commitmentId;
   }
 
-  function executeSEOCommitment(uint256 commitmentId) private returns (bytes32) {
+  function executeSEOCommitment(uint256 commitmentId) private {
     SEOCommitment memory comt = seoCommitmentList[commitmentId];
     require(comt.isValue, "Not a valid commitment ID");
     require(comt.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
 
     bytes32 requestId = requestGoogleSearch(comt, this.fulfillCommitment.selector);
-    requestMap[requestId] = SearchRequest(true, commitmentId, comt.timeToExecute);
+    requestMap[requestId] = SearchRequest(true, commitmentId);
 
     comt.status = SeoCommitmentStatus.Processing;
+    comt.requestId = requestId;
     seoCommitmentList[commitmentId] = comt;
 
     emit RequestGoogleSearchSent(commitmentId, requestId, comt.timeToExecute);
 
-    return requestId;
+    return;
   }
 
   function requestGoogleSearch(SEOCommitment memory comt, bytes4 callbackSelector) private returns (bytes32 requestId)
@@ -167,22 +168,25 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     return sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
   }
 
-  function rerunExpiredRequest(bytes32 _requestId) public {
-    SearchRequest memory req = requestMap[_requestId];
-    require(req.isValue, "No such request");
-    SEOCommitment memory comt = seoCommitmentList[req.commitmentId];
-    require(comt.isValue, "No commitment for that requestId");
-    require(comt.status == SeoCommitmentStatus.Processing, "Commitment is not in Processing status");
-    require(now > comt.timeToExecute + REQUEST_EXPIRY, "Request has not yet expired");
+  function rerunExpiredCommitment(uint256 _commitmentId) public commitmentExpired(_commitmentId) {
     require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
 
-    delete requestMap[_requestId];
+    SEOCommitment memory comt = seoCommitmentList[_commitmentId];
+    delete requestMap[comt.requestId];
     comt.status = SeoCommitmentStatus.Created;
-    seoCommitmentList[req.commitmentId] = comt;
+    seoCommitmentList[_commitmentId] = comt;
 
-    executeSEOCommitment(req.commitmentId);
+    executeSEOCommitment(_commitmentId);
 
     return;
+  }
+
+  modifier commitmentExpired(uint256 _commitmentId) {
+    SEOCommitment memory comt = seoCommitmentList[_commitmentId];
+    require(comt.isValue, "No commitment for that commitmentId");
+    require(comt.status == SeoCommitmentStatus.Processing, "Commitment is not in Processing status");
+    require(now > comt.timeToExecute + REQUEST_EXPIRY, "Commitment has not yet expired");
+    _;
   }
 
   function fulfillCommitment(bytes32 _requestId, uint256 _rank)
@@ -201,6 +205,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     SEOCommitment memory comt = seoCommitmentList[req.commitmentId];
     require(comt.isValue, "No commitment found for that commitmentId");
     require(comt.status == SeoCommitmentStatus.Processing, "Commitment not in processing status");
+    comt.requestId = 0;
     comt.status = SeoCommitmentStatus.Completed;
     seoCommitmentList[req.commitmentId] = comt;
 

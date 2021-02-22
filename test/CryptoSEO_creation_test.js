@@ -156,7 +156,6 @@ contract('CryptoSEO commitment creation', accounts => {
       it('executes the commitment', async () => {
         let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
         assert.equal(requestEvent.returnValues.commitmentId, 0)
-        assert.equal(requestEvent.returnValues.timeToExecute, validCommitment.timeToExecute)
 
         let reqId = requestEvent.returnValues.requestId
         assert.equal(reqId.length, 66)
@@ -165,7 +164,9 @@ contract('CryptoSEO commitment creation', accounts => {
         let searchReq = await cc.requestMap(reqId)
         assert.equal(searchReq.isValue, true)
         assert.equal(searchReq.commitmentId, 0)
-        assert.equal(searchReq.timeToExecute, validCommitment.timeToExecute)
+
+        let comt = await cc.seoCommitmentList(0)
+        assert.equal(comt.requestId, reqId)
       })
     })
   })

@@ -1,37 +1,11 @@
 import React, { Component } from 'react'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Button from 'react-bootstrap/Button'
-import { Container, Form, Card, Modal, Spinner, Col, InputGroup } from 'react-bootstrap'
+import { Container, Form, Card, Col, InputGroup } from 'react-bootstrap'
+import ModalDialog from './modal'
+
 const LINK_TOKEN_MULTIPLIER = 10**18
 const ORACLE_PAYMENT = 1 * LINK_TOKEN_MULTIPLIER
-
-function ModalDialog(props) {
-    return (
-      <>
-        <Modal show={props.modal.show} onHide={props.handleClose}>
-          <Modal.Header closeButton>
-            <Modal.Title>{props.modal.title}</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>{props.modal.message}</Modal.Body>
-          <Modal.Footer>
-            {props.modal.secondaryBtn ?
-            <Button variant="secondary" onClick={props.handleClose}>
-              {props.modal.secondaryBtn.text}
-            </Button>
-            : <></>}
-            {props.modal.primaryBtn ?
-            <Button variant="primary" onClick={props.modal.primaryBtn.fn ? props.modal.primaryBtn.fn : props.handleClose}>
-              {props.modal.primaryBtn.text}
-            </Button>
-            : <></>}
-            {props.modal.spinner ?
-            <Spinner animation="border" />
-            : <></>}
-          </Modal.Footer>
-        </Modal>
-      </>
-    );
-}
 
 export default class Create extends Component {
     constructor(props){
@@ -172,13 +146,13 @@ export default class Create extends Component {
 
      createCommitment = () => {
        let timeNow = Math.floor(Date.now() / 1000)
-       let expiryTime = 0
+       let timeToExecute = 0
        if (this.state.durationUnits == "Minutes") {
-         expiryTime = timeNow + this.state.durationAmt * 60
+        timeToExecute = timeNow + this.state.durationAmt * 60
        } else if (this.state.durationUnits == "Hours") {
-         expiryTime = timeNow + this.state.durationAmt * 60 * 60
+        timeToExecute = timeNow + this.state.durationAmt * 60 * 60
        } else if (this.state.durationUnits == "Days") {
-         expiryTime = timeNow + this.state.durationAmt * 60 * 60 * 24
+        timeToExecute = timeNow + this.state.durationAmt * 60 * 60 * 24
        } else {
          console.error("Unknown unit type")
          return
@@ -191,7 +165,7 @@ export default class Create extends Component {
          initialSearchRank: parseInt(this.state.initialSearchRank),
          amtPerRankEth: this.web3.utils.toWei(this.state.amtPerRankEth, "ether"),
          maxAmtEth: this.web3.utils.toWei(this.state.maxAmtEth, "ether"),
-         expiryTime: expiryTime,
+         timeToExecute: timeToExecute,
          payee: this.state.payee
        }
  
@@ -241,7 +215,7 @@ export default class Create extends Component {
       }
        
        this.getEth().CryptoSEOContract.methods.createSEOCommitment(callObj.site, callObj.searchTerm, callObj.domainMatch,
-         callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.expiryTime, callObj.payee).send( 
+         callObj.initialSearchRank, callObj.amtPerRankEth, callObj.maxAmtEth, callObj.timeToExecute, callObj.payee).send( 
          {value: callObj.maxAmtEth, from: this.getEth().currentAccount})
          .once('transactionHash', onWaiting)
          .on('error', onError)

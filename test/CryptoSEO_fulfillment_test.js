@@ -84,6 +84,7 @@ contract('CryptoSEO commitment fulfillment', accounts => {
         let comt = await cc.seoCommitmentList(0)
         assert.equal(comt.isValue, true)
         assert.equal(comt.status, statusCodes.indexOf("Completed"))
+        assert.equal(comt.requestId, 0)
       })
     })
 
@@ -113,7 +114,8 @@ contract('CryptoSEO commitment fulfillment', accounts => {
 
         let comt = await cc.seoCommitmentList(0)
         assert.equal(comt.isValue, true)
-        assert.equal(comt.status, statusCodes.indexOf("Completed"))        
+        assert.equal(comt.status, statusCodes.indexOf("Completed"))
+        assert.equal(comt.requestId, 0)
       })
     })
 
@@ -147,7 +149,8 @@ contract('CryptoSEO commitment fulfillment', accounts => {
 
         let comt = await cc.seoCommitmentList(0)
         assert.equal(comt.isValue, true)
-        assert.equal(comt.status, statusCodes.indexOf("Completed"))        
+        assert.equal(comt.status, statusCodes.indexOf("Completed"))
+        assert.equal(comt.requestId, 0)
       })
     })
     
@@ -178,7 +181,8 @@ contract('CryptoSEO commitment fulfillment', accounts => {
 
         let comt = await cc.seoCommitmentList(0)
         assert.equal(comt.isValue, true)
-        assert.equal(comt.status, statusCodes.indexOf("Completed"))        
+        assert.equal(comt.status, statusCodes.indexOf("Completed"))
+        assert.equal(comt.requestId, 0)
       })
     })
   })
