@@ -1,5 +1,7 @@
 const { Requester, Validator } = require('@chainlink/external-adapter')
-const  googleIt = require('google-it')
+const fetch = require('node-fetch')
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY
+const SEARCH_ENG_ID = process.env.SEARCH_ENG_ID
 
 // Define custom parameters to be used by the adapter.
 // Extra parameters can be stated in the extra object,
@@ -10,6 +12,26 @@ const customParams = {
   site: true,
   domainMatch: false,
   engine: false
+}
+
+const search = (term, site, domainMatch, start) => {
+  if (start == null) start = 1
+  return new Promise((resolve) => {
+    if (start > 100) return resolve(0)
+    return resolve(fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENG_ID}&q=${term}&fields=items(link)&start=${start}`)
+      .then(res => res.json())
+      .then(res => {
+        console.log(`start: ${start} to ${start + 10}`)
+        console.log(res)
+        let rank = res.items.findIndex(item => {
+          let url = new URL(item.link)
+          return ((domainMatch && url.hostname == site.hostname) ||
+            url.href == site.href)
+        })
+        if (rank >= 0) return rank + start
+        return search(term, site, domainMatch, start + 10)
+    }))
+  })
 }
 
 const createRequest = (input, callback) => {
@@ -27,31 +49,21 @@ const createRequest = (input, callback) => {
   // Will look at handling other search engines in the future
   const engine = validator.validated.data.engine || 'google'
 
-  googleIt({"query": term}).then(results => {
-    var siteRank = 0
-    for (var i = 0; i < results.length; i++) {
-      var resURL = new URL(results[i].link)
-      if ((domainMatch && resURL.hostname == site.hostname) ||
-       resURL.href == site.href) {
-         siteRank = i + 1
-         continue
+  search(term, site, domainMatch)
+    .then(siteRank => {
+      // It's common practice to store the desired value at the top-level
+      // result key. 
+      var response = {
+        data: { rank: siteRank, result: siteRank },
+        status: 200,
+        result: siteRank
       }
-    }
 
-    // It's common practice to store the desired value at the top-level
-    // result key. This allows different adapters to be compatible with
-    // one another.
-    var response = {
-      data: { rank: siteRank, result: siteRank },
-      status: 200,
-      result: siteRank
-    }
-
-    callback(response.status, Requester.success(jobRunID, response))
-  }).catch(err => {
-    console.error(err)
-    callback(500, Requester.errored(jobRunID, error))
-  })
+      callback(response.status, Requester.success(jobRunID, response))
+    }).catch(err => {
+      console.error(err)
+      callback(500, Requester.errored(jobRunID, error))
+    })
 }
 
 // This is a wrapper to allow the function to work with
