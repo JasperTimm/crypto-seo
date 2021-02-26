@@ -8,3 +8,11 @@ install:
 script:
   - npm run build
   - npm run test
+
+addons:
+  artifacts:
+    s3_region: "us-east-1"
+    paths:
+      - "./dist"
+    target_paths:
+      - /$TRAVIS_BRANCH
