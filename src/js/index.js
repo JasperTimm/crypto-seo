@@ -227,6 +227,7 @@ class App extends Component {
     return this.state.eth
   }
 
+
   render(){
     return (
     <Container fluid>
