@@ -8,7 +8,6 @@ install:
 
 script:
 - npm run build
-# - npm run test
 
 addons:
   ssh_known_hosts: jaspa.codes
@@ -23,5 +22,3 @@ deploy:
   provider: script
   skip_cleanup: true
   script: rsync -r --delete-after --quiet $TRAVIS_BUILD_DIR/dist travis-ci@jaspa.codes:/var/www/crypto-seo
-  # on:
-  #   branch: master
