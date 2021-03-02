@@ -25,7 +25,9 @@ contract('CryptoSEO commitment creation', accounts => {
     payee: stranger,
   }
 
-  const initOraclePayment = 10 ** 18
+  const sleepPayment = 0.1 * 10 ** 18
+  const searchPayment = 0.1 * 10 ** 18
+  const linkPayment = sleepPayment + searchPayment
   var BN = web3.utils.BN
 
   let link, oc, cc
@@ -33,7 +35,7 @@ contract('CryptoSEO commitment creation', accounts => {
   beforeEach(async () => {
     link = await LinkToken.new({ from: defaultAccount })
     oc = await Oracle.new(link.address, { from: defaultAccount })
-    cc = await CryptoSEO.new(link.address, oc.address, "000", { from: consumer })
+    cc = await CryptoSEO.new(link.address, oc.address, "001", "002", "http://test.com", { from: consumer })
     await oc.setFulfillmentPermission(oracleNode, true, {
       from: defaultAccount,
     })
@@ -42,7 +44,7 @@ contract('CryptoSEO commitment creation', accounts => {
   
   describe('#createSEOCommitment', () => {
     beforeEach(async () => {
-      await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
+      await link.approve(cc.address, String(linkPayment), {from: defaultAccount})
     })
 
     context('when called with a valid commitment', () => {
@@ -54,7 +56,7 @@ contract('CryptoSEO commitment creation', accounts => {
           })
         let newCommitment = await cc.seoCommitmentList(0)
         assert.equal(newCommitment.isValue, true)
-        assert.equal(newCommitment.status, statusCodes.indexOf("Processing"))        
+        assert.equal(newCommitment.status, statusCodes.indexOf("Created"))        
         assert.equal(newCommitment.domainMatch, validCommitment.domainMatch)
         assert.equal(newCommitment.site, validCommitment.site)
         assert.equal(newCommitment.searchTerm, validCommitment.searchTerm)
@@ -66,7 +68,7 @@ contract('CryptoSEO commitment creation', accounts => {
         assert.equal(newCommitment.payer, defaultAccount)
 
         let ocLINKBal = await link.balanceOf(oc.address)
-        assert.equal(String(ocLINKBal), String(initOraclePayment))
+        assert.equal(String(ocLINKBal), String(sleepPayment))
 
         let numSEOCommitments = await cc.numSEOCommitments()
         assert.equal(numSEOCommitments, 1)
@@ -142,9 +144,9 @@ contract('CryptoSEO commitment creation', accounts => {
     })
   })
 
-  describe('#executeSEOCommitment', () => {
+  describe('#executeWait', () => {
     beforeEach(async () => {
-      await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
+      await link.approve(cc.address, String(linkPayment), {from: defaultAccount})
       await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
         validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
           from: defaultAccount,
@@ -153,8 +155,8 @@ contract('CryptoSEO commitment creation', accounts => {
     })
 
     context('when called with a valid commitment', () => {
-      it('executes the commitment', async () => {
-        let requestEvent = (await cc.getPastEvents('RequestGoogleSearchSent'))[0]
+      it('executes wait for the commitment', async () => {
+        let requestEvent = (await cc.getPastEvents('RequestWaitSent'))[0]
         assert.equal(requestEvent.returnValues.commitmentId, 0)
 
         let reqId = requestEvent.returnValues.requestId
@@ -164,9 +166,6 @@ contract('CryptoSEO commitment creation', accounts => {
         let searchReq = await cc.requestMap(reqId)
         assert.equal(searchReq.isValue, true)
         assert.equal(searchReq.commitmentId, 0)
-
-        let comt = await cc.seoCommitmentList(0)
-        assert.equal(comt.requestId, reqId)
       })
     })
   })

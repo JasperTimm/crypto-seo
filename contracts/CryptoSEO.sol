@@ -6,7 +6,8 @@ import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "@chainlink/contracts/src/v0.6/vendor/Ownable.sol";
 
 contract CryptoSEO is ChainlinkClient, Ownable {
-  uint256 public ORACLE_PAYMENT = 1 * LINK;
+  uint256 public SLEEP_PAYMENT = 0.1 * 10 ** 18;
+  uint256 public SEARCH_PAYMENT = 0.1 * 10 ** 18;
   uint256 public REQUEST_EXPIRY = 1 hours;
   LinkTokenInterface private link;
   
@@ -27,7 +28,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     SeoCommitmentStatus status;
   }
 
-  struct SearchRequest {
+  struct ChainlinkRequest {
     bool isValue;
     uint256 commitmentId;
   }
@@ -38,13 +39,18 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     string searchTerm
   );
 
-  event RequestGoogleSearchSent(
+  event RequestWaitSent(
     uint256 indexed commitmentId,
     bytes32 indexed requestId,
     uint256 timeToExecute
   );
 
-  event RequestGoogleSearchFulfilled(
+  event RequestSearchSent(
+    uint256 indexed commitmentId,
+    bytes32 indexed requestId
+  );
+
+  event RequestSearchFulfilled(
     bytes32 indexed requestId,
     uint256 rank
   );
@@ -56,14 +62,16 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   );
 
   mapping (uint256=>SEOCommitment) public seoCommitmentList;
-  mapping (bytes32=>SearchRequest) public requestMap;
+  mapping (bytes32=>ChainlinkRequest) public requestMap;
   mapping (address=>uint256) public payoutAmt;
 
   uint256 public numSEOCommitments;
   address public oracle;
-  string public googleSearchJobId;
+  string public sleepJobId;
+  string public searchJobId;
+  string public searchUrl;
 
-  constructor(address _link, address _oracle, string memory _jobId) public Ownable() {
+  constructor(address _link, address _oracle, string memory _sleepJobId, string memory _searchJobId, string memory _searchUrl) public Ownable() {
     numSEOCommitments = 0;
 
     if (_link == address(0)) {
@@ -74,7 +82,9 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     link = LinkTokenInterface(chainlinkTokenAddress());
     
     setOracle(_oracle);
-    setGoogleSearchJobId(_jobId);
+    setSleepJobId(_sleepJobId);
+    setSearchJobId(_searchJobId);
+    setSearchUrl(_searchUrl);
   }
 
   //Ensure we can receive Eth transfers for testing
@@ -84,16 +94,28 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     oracle = _oracle;
   }
 
-  function setGoogleSearchJobId(string memory _jobid) public onlyOwner {
-    googleSearchJobId = _jobid;
+  function setSleepJobId(string memory _jobid) public onlyOwner {
+    sleepJobId = _jobid;
+  }
+
+  function setSearchJobId(string memory _jobid) public onlyOwner {
+    searchJobId = _jobid;
+  }
+
+  function setSearchUrl(string memory _searchUrl) public onlyOwner {
+    searchUrl = _searchUrl;
   }
 
   function setRequestTimeout(uint256 _REQUEST_EXPIRY) public onlyOwner {
     REQUEST_EXPIRY = _REQUEST_EXPIRY;
   }
 
-  function setOraclePayment(uint256 _ORACLE_PAYMENT) public onlyOwner {
-    ORACLE_PAYMENT = _ORACLE_PAYMENT;
+  function setSleepPayment(uint256 _PAYMENT) public onlyOwner {
+    SLEEP_PAYMENT = _PAYMENT;
+  }
+
+  function setSearchPayment(uint256 _PAYMENT) public onlyOwner {
+    SEARCH_PAYMENT = _PAYMENT;
   }
 
   function withdrawEther() public onlyOwner {
@@ -124,7 +146,7 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(maxPayableEth >= amtPerRankEth, "maxPayableEth must be larger than or equal to amtPerRankEth");
     require(initialSearchRank > 0, "initialSearchRank must be greater than zero");
     require(timeToExecute > now, "timeToExecute must be in the future");
-    require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
+    require(link.transferFrom(msg.sender, address(this), SLEEP_PAYMENT + SEARCH_PAYMENT), "LINK transferFrom not approved");
 
     SEOCommitment memory comt = SEOCommitment(true, domainMatch, site, searchTerm, initialSearchRank,
       amtPerRankEth, maxPayableEth, timeToExecute, payee, msg.sender, 0, SeoCommitmentStatus.Created);
@@ -134,10 +156,34 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
     emit SEOCommitmentCreated(commitmentId, site, searchTerm);
 
-    executeSEOCommitment(commitmentId);
+    executeWait(commitmentId, comt.timeToExecute);
 
     return commitmentId;
   }
+
+  function executeWait(uint256 commitmentId, uint256 timeToExecute) private {
+    Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(sleepJobId), address(this), this.fulfillWait.selector);
+    req.addUint("until", timeToExecute);
+    bytes32 requestId = sendChainlinkRequestTo(oracle, req, SLEEP_PAYMENT);
+    requestMap[requestId] = ChainlinkRequest(true, commitmentId);
+
+    emit RequestWaitSent(commitmentId, requestId, timeToExecute);
+
+    return;
+  }
+
+  function fulfillWait(bytes32 _requestId)
+    public
+    onlyOracle
+    recordChainlinkFulfillment(_requestId)
+  {
+    ChainlinkRequest memory req = requestMap[_requestId];
+    require(req.isValue, "SearchRequest with that requestId doesn't exit");
+    delete requestMap[_requestId];
+    executeSEOCommitment(req.commitmentId);
+
+    return;
+  } 
 
   function executeSEOCommitment(uint256 commitmentId) private {
     SEOCommitment memory comt = seoCommitmentList[commitmentId];
@@ -145,31 +191,28 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(comt.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
 
     bytes32 requestId = requestGoogleSearch(comt, this.fulfillCommitment.selector);
-    requestMap[requestId] = SearchRequest(true, commitmentId);
+    requestMap[requestId] = ChainlinkRequest(true, commitmentId);
 
     comt.status = SeoCommitmentStatus.Processing;
     comt.requestId = requestId;
     seoCommitmentList[commitmentId] = comt;
 
-    emit RequestGoogleSearchSent(commitmentId, requestId, comt.timeToExecute);
+    emit RequestSearchSent(commitmentId, requestId);
 
     return;
   }
 
   function requestGoogleSearch(SEOCommitment memory comt, bytes4 callbackSelector) private returns (bytes32 requestId)
   {
-    Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(googleSearchJobId), address(this), callbackSelector);
-    req.add("term", comt.searchTerm);
-    req.add("site", comt.site);
-    req.addUint("until", comt.timeToExecute);
-    if (comt.domainMatch) {
-      req.add("domainMatch", "true");
-    }
-    return sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
+    Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(searchJobId), address(this), callbackSelector);
+    string memory url = string(abi.encodePacked(searchUrl, "?term=", comt.searchTerm, "&domainMatch=", comt.domainMatch, "&site=", comt.site));
+    req.add("get", url);
+    req.add("path", "result");
+    return sendChainlinkRequestTo(oracle, req, SEARCH_PAYMENT);
   }
 
   function rerunExpiredCommitment(uint256 _commitmentId) public commitmentExpired(_commitmentId) {
-    require(link.transferFrom(msg.sender, address(this), ORACLE_PAYMENT), "LINK transferFrom not approved");
+    require(link.transferFrom(msg.sender, address(this), SEARCH_PAYMENT), "LINK transferFrom not approved");
 
     SEOCommitment memory comt = seoCommitmentList[_commitmentId];
     delete requestMap[comt.requestId];
@@ -184,21 +227,24 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   modifier commitmentExpired(uint256 _commitmentId) {
     SEOCommitment memory comt = seoCommitmentList[_commitmentId];
     require(comt.isValue, "No commitment for that commitmentId");
-    require(comt.status == SeoCommitmentStatus.Processing, "Commitment is not in Processing status");
+    require(comt.status == SeoCommitmentStatus.Created, "Commitment is not in Created status");
     require(now > comt.timeToExecute + REQUEST_EXPIRY, "Commitment has not yet expired");
+    _;
+  }
+
+  modifier onlyOracle() {
+    require(msg.sender == oracle, "This function can only be called by the Oracle");
     _;
   }
 
   function fulfillCommitment(bytes32 _requestId, uint256 _rank)
     public
+    onlyOracle
     recordChainlinkFulfillment(_requestId)
   {
-    // Ensure we're only called as a callback from the Oracle
-    require(msg.sender == oracle, "This function can only be called by the Oracle");
+    emit RequestSearchFulfilled(_requestId, _rank);
 
-    emit RequestGoogleSearchFulfilled(_requestId, _rank);
-
-    SearchRequest memory req = requestMap[_requestId];
+    ChainlinkRequest memory req = requestMap[_requestId];
     require(req.isValue, "SearchRequest with that requestId doesn't exit");
     delete requestMap[_requestId];
 
@@ -238,6 +284,8 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     uint256 bal = payoutAmt[msg.sender];
     payoutAmt[msg.sender] = 0;
     msg.sender.transfer(bal);
+
+    return;
   }
 
   function stringToBytes32(string memory source) private pure returns (bytes32 result) {
