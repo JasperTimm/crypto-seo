@@ -5,7 +5,7 @@ import ModalDialog from './modal'
 
 const statusCodes = ["Created", "Processing", "Completed"]
 const LINK_TOKEN_MULTIPLIER = 10**18
-const ORACLE_PAYMENT = 1 * LINK_TOKEN_MULTIPLIER
+const SEARCH_PAYMENT = 0.1 * LINK_TOKEN_MULTIPLIER
 
 export default class View extends Component {
     constructor(props) {
@@ -187,7 +187,7 @@ export default class View extends Component {
         let linkBal = await this.getEth().LinkTokenContract.methods.balanceOf(this.getEth().currentAccount).call(
           {from: this.getEth().currentAccount})
   
-        if (linkBal < ORACLE_PAYMENT) {
+        if (linkBal < SEARCH_PAYMENT) {
           this.showSimpleModal("Insufficient LINK", "This account has insufficient LINK to rerun this contract")
           return
         }
@@ -233,7 +233,7 @@ export default class View extends Component {
         }          
 
         console.log("About to call approve on LINK token...")
-        this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(ORACLE_PAYMENT)).send( 
+        this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(SEARCH_PAYMENT)).send( 
             {from: this.getEth().currentAccount})
             .once('transactionHash', this.txWaiting)
             .on('error', this.txError)

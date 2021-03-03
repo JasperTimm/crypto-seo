@@ -13,10 +13,12 @@ contract('CryptoSEO simple', accounts => {
   const consumer = accounts[3]
 
   const zeroAddr = '0x0000000000000000000000000000000000000000'
-  const searchJobId = "000"
-  const newJobId = "001"
+  const initSleepJobId = "001"
+  const initSearchJobId = "002"
+  const initSearchUrl = "http://test.com"
   const initReqExpiry = 60 * 60 // (1 hour)
-  const initOraclePayment = 10 ** 18
+  const initSleepPayment = 0.1 * 10 ** 18
+  const initSearchPayment = 0.1 * 10 ** 18
   const payment = web3.utils.toWei('1', 'ether')
   var BN = web3.utils.BN
 
@@ -25,7 +27,7 @@ contract('CryptoSEO simple', accounts => {
   beforeEach(async () => {
     link = await LinkToken.new({ from: defaultAccount })
     oc = await Oracle.new(link.address, { from: defaultAccount })
-    cc = await CryptoSEO.new(link.address, oc.address, "000", { from: consumer })
+    cc = await CryptoSEO.new(link.address, oc.address, initSleepJobId, initSearchJobId, initSearchUrl, { from: consumer })
     await oc.setFulfillmentPermission(oracleNode, true, {
       from: defaultAccount,
     })
@@ -49,20 +51,38 @@ contract('CryptoSEO simple', accounts => {
     })
   })
 
-  describe('#setGoogleSearchJobId', () => {
+  describe('#setSleepJobId', () => {
     context('when called by a non-owner', () => {
       it('cannot set job id', async () => {
-        await expectRevert(cc.setGoogleSearchJobId(newJobId, { from: stranger }), "Ownable: caller is not the owner")
+        await expectRevert(cc.setSleepJobId("000", { from: stranger }), "Ownable: caller is not the owner")
       })
     })
 
     context('when called by the owner', () => {
       it('sets the job id', async () => {
-        let jobId = await cc.googleSearchJobId()
-        assert.equal(jobId, searchJobId)
-        await cc.setGoogleSearchJobId(newJobId, { from: consumer })
-        jobId = await cc.googleSearchJobId()
-        assert.equal(jobId, newJobId)
+        let jobId = await cc.sleepJobId()
+        assert.equal(jobId, initSleepJobId)
+        await cc.setSleepJobId("000", { from: consumer })
+        jobId = await cc.sleepJobId()
+        assert.equal(jobId, "000")
+      })
+    })
+  })
+
+  describe('#setSearchJobId', () => {
+    context('when called by a non-owner', () => {
+      it('cannot set job id', async () => {
+        await expectRevert(cc.setSearchJobId("000", { from: stranger }), "Ownable: caller is not the owner")
+      })
+    })
+
+    context('when called by the owner', () => {
+      it('sets the job id', async () => {
+        let jobId = await cc.searchJobId()
+        assert.equal(jobId, initSearchJobId)
+        await cc.setSearchJobId("000", { from: consumer })
+        jobId = await cc.searchJobId()
+        assert.equal(jobId, "000")
       })
     })
   })
@@ -85,23 +105,59 @@ contract('CryptoSEO simple', accounts => {
     })
   })
 
-  describe('#setOraclePayment', () => {
+  describe('#setSleepPayment', () => {
     context('when called by a non-owner', () => {
-      it('cannot set the oracle payment', async () => {
-        await expectRevert(cc.setOraclePayment(0, { from: stranger }), "Ownable: caller is not the owner")
+      it('cannot set the sleep payment', async () => {
+        await expectRevert(cc.setSleepPayment(0, { from: stranger }), "Ownable: caller is not the owner")
       })
     })
 
     context('when called by the owner', () => {
-      it('sets the oracle payment', async () => {
-        let oraclePmt = await cc.ORACLE_PAYMENT()
-        assert.equal(oraclePmt, initOraclePayment)
-        await cc.setOraclePayment(0, { from: consumer })
-        oraclePmt = await cc.ORACLE_PAYMENT()
+      it('sets the sleep payment', async () => {
+        let sleepPmt = await cc.SLEEP_PAYMENT()
+        assert.equal(sleepPmt, initSleepPayment)
+        await cc.setSleepPayment(0, { from: consumer })
+        oraclePmt = await cc.SLEEP_PAYMENT()
         assert.equal(oraclePmt, 0)
       })
     })
   })
+
+  describe('#setSearchPayment', () => {
+    context('when called by a non-owner', () => {
+      it('cannot set the search payment', async () => {
+        await expectRevert(cc.setSearchPayment(0, { from: stranger }), "Ownable: caller is not the owner")
+      })
+    })
+
+    context('when called by the owner', () => {
+      it('sets the search payment', async () => {
+        let oraclePmt = await cc.SEARCH_PAYMENT()
+        assert.equal(oraclePmt, initSearchPayment)
+        await cc.setSearchPayment(0, { from: consumer })
+        oraclePmt = await cc.SEARCH_PAYMENT()
+        assert.equal(oraclePmt, 0)
+      })
+    })
+  })  
+
+  describe('#setSearchUrl', () => {
+    context('when called by a non-owner', () => {
+      it('cannot set the search URL', async () => {
+        await expectRevert(cc.setSearchUrl("http://new.com", { from: stranger }), "Ownable: caller is not the owner")
+      })
+    })
+
+    context('when called by the owner', () => {
+      it('sets the search URL', async () => {
+        let searchUrl = await cc.searchUrl()
+        assert.equal(searchUrl, initSearchUrl)
+        await cc.setSearchUrl("http://new.com", { from: consumer })
+        searchUrl = await cc.searchUrl()
+        assert.equal(searchUrl, "http://new.com")
+      })
+    })
+  }) 
 
   describe('#withdrawEther', () => {
     beforeEach(async () => {

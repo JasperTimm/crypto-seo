@@ -25,7 +25,9 @@ contract('CryptoSEO commitment fulfillment', accounts => {
     payee: stranger,
   }
 
-  const initOraclePayment = 10 ** 18
+  const sleepPayment = 0.1 * 10 ** 18
+  const searchPayment = 0.1 * 10 ** 18
+  const linkPayment = sleepPayment + searchPayment
   var BN = web3.utils.BN
 
   let link, oc, cc, reqEvt
@@ -33,7 +35,7 @@ contract('CryptoSEO commitment fulfillment', accounts => {
   beforeEach(async () => {
     link = await LinkToken.new({ from: defaultAccount })
     oc = await Oracle.new(link.address, { from: defaultAccount })
-    cc = await CryptoSEO.new(link.address, oc.address, "000", { from: consumer })
+    cc = await CryptoSEO.new(link.address, oc.address, "001", "002", "http://test.com", { from: consumer })
     await oc.setFulfillmentPermission(oracleNode, true, {
       from: defaultAccount,
     })
@@ -42,18 +44,24 @@ contract('CryptoSEO commitment fulfillment', accounts => {
   
   describe('#fulfillCommitment', () => {
     beforeEach(async () => {
-      await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
+      await link.approve(cc.address, String(linkPayment), {from: defaultAccount})
       await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
         validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
           from: defaultAccount,
           value: validCommitment.maxPayableEth
         })
+      let waitEvent = (await oc.getPastEvents('OracleRequest'))[0]
+      await oc.fulfillOracleRequest(waitEvent.returnValues.requestId, waitEvent.returnValues.payment, waitEvent.returnValues.callbackAddr,
+        waitEvent.returnValues.callbackFunctionId, waitEvent.returnValues.cancelExpiration, web3.utils.padLeft(web3.utils.toHex(0), 64), {
+          from: oracleNode
+        })      
       reqEvt = (await oc.getPastEvents('OracleRequest'))[0]
     })
 
     context('when executed from an address other than the Oracle', () => {
       it('fails to execute', async () => {
-        await expectRevert(cc.fulfillCommitment(reqEvt.returnValues.requestId, 0, {from: stranger}), "Source must be the oracle of the request")
+        let errMsg = "This function can only be called by the Oracle -- Reason given: This function can only be called by the Oracle."
+        await expectRevert(cc.fulfillCommitment(reqEvt.returnValues.requestId, 0, {from: stranger}), errMsg)
       })
     })
 
@@ -69,7 +77,7 @@ contract('CryptoSEO commitment fulfillment', accounts => {
         assert.equal(payoutEvt.returnValues.payerBal, validCommitment.maxPayableEth)
         assert.equal(payoutEvt.returnValues.payeeBal, '0')
 
-        let searchEvt = (await cc.getPastEvents('RequestGoogleSearchFulfilled'))[0]
+        let searchEvt = (await cc.getPastEvents('RequestSearchFulfilled'))[0]
         assert.equal(searchEvt.returnValues.requestId, reqEvt.returnValues.requestId)
         assert.equal(searchEvt.returnValues.rank, rank)
 
@@ -100,7 +108,7 @@ contract('CryptoSEO commitment fulfillment', accounts => {
         assert.equal(payoutEvt.returnValues.payerBal, validCommitment.maxPayableEth)
         assert.equal(payoutEvt.returnValues.payeeBal, '0')
 
-        let searchEvt = (await cc.getPastEvents('RequestGoogleSearchFulfilled'))[0]
+        let searchEvt = (await cc.getPastEvents('RequestSearchFulfilled'))[0]
         assert.equal(searchEvt.returnValues.requestId, reqEvt.returnValues.requestId)
         assert.equal(searchEvt.returnValues.rank, rank)
 
@@ -135,7 +143,7 @@ contract('CryptoSEO commitment fulfillment', accounts => {
         assert.equal(payoutEvt.returnValues.payerBal, String(expPayerBal))
         assert.equal(payoutEvt.returnValues.payeeBal, String(expPayeeBal))
 
-        let searchEvt = (await cc.getPastEvents('RequestGoogleSearchFulfilled'))[0]
+        let searchEvt = (await cc.getPastEvents('RequestSearchFulfilled'))[0]
         assert.equal(searchEvt.returnValues.requestId, reqEvt.returnValues.requestId)
         assert.equal(searchEvt.returnValues.rank, rank)
 
@@ -167,7 +175,7 @@ contract('CryptoSEO commitment fulfillment', accounts => {
         assert.equal(payoutEvt.returnValues.payerBal, '0')
         assert.equal(payoutEvt.returnValues.payeeBal, validCommitment.maxPayableEth)
 
-        let searchEvt = (await cc.getPastEvents('RequestGoogleSearchFulfilled'))[0]
+        let searchEvt = (await cc.getPastEvents('RequestSearchFulfilled'))[0]
         assert.equal(searchEvt.returnValues.requestId, reqEvt.returnValues.requestId)
         assert.equal(searchEvt.returnValues.rank, rank)
 
@@ -190,12 +198,17 @@ contract('CryptoSEO commitment fulfillment', accounts => {
   describe('#withdrawPayout', () => {
     beforeEach(async () => {
       let rank = 0
-      await link.approve(cc.address, String(initOraclePayment), {from: defaultAccount})
+      await link.approve(cc.address, String(linkPayment), {from: defaultAccount})
       await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
         validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
           from: defaultAccount,
           value: validCommitment.maxPayableEth
         })
+      let waitEvent = (await oc.getPastEvents('OracleRequest'))[0]
+      await oc.fulfillOracleRequest(waitEvent.returnValues.requestId, waitEvent.returnValues.payment, waitEvent.returnValues.callbackAddr,
+        waitEvent.returnValues.callbackFunctionId, waitEvent.returnValues.cancelExpiration, web3.utils.padLeft(web3.utils.toHex(0), 64), {
+          from: oracleNode
+        })        
       reqEvt = (await oc.getPastEvents('OracleRequest'))[0]
       await oc.fulfillOracleRequest(reqEvt.returnValues.requestId, reqEvt.returnValues.payment, reqEvt.returnValues.callbackAddr,
         reqEvt.returnValues.callbackFunctionId, reqEvt.returnValues.cancelExpiration, web3.utils.padLeft(web3.utils.toHex(rank), 64), {

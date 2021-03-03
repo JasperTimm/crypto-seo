@@ -66,32 +66,16 @@ const createRequest = (input, callback) => {
     })
 }
 
-// This is a wrapper to allow the function to work with
-// GCP Functions
-exports.gcpservice = (req, res) => {
-  createRequest(req.body, (statusCode, data) => {
-    res.status(statusCode).send(data)
-  })
-}
-
-// This is a wrapper to allow the function to work with
-// AWS Lambda
-exports.handler = (event, context, callback) => {
-  createRequest(event, (statusCode, data) => {
-    callback(null, data)
-  })
-}
-
-// This is a wrapper to allow the function to work with
-// newer AWS Lambda implementations
-exports.handlerv2 = (event, context, callback) => {
-  createRequest(JSON.parse(event.body), (statusCode, data) => {
+// This method is used by AWS Lambda to handle both GETs and POSTs
+exports.dosearch = (event, context, callback) => {
+  let reqData = event.httpMethod == "POST" ? JSON.parse(event.body) : {id:0, data: event.queryStringParameters}
+  createRequest(reqData, (statusCode, data) => {
     callback(null, {
       statusCode: statusCode,
       body: JSON.stringify(data),
       isBase64Encoded: false
     })
-  })
+  })  
 }
 
 // This allows the function to be exported for testing

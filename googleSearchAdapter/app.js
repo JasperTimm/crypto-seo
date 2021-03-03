@@ -15,4 +15,12 @@ app.post('/request', (req, res) => {
   })
 })
 
+app.get('/search', (req, res) => {
+  console.log('GET Data: ', req.query)
+  createRequest({id:0, data: req.query}, (status, result) => {
+    console.log('Result: ', result)
+    res.status(status).json(result)
+  })  
+})
+
 app.listen(port, () => console.log(`Listening on port ${port}!`))

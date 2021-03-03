@@ -59,12 +59,15 @@ provider:
 #    - exclude-me-dir/**
 
 functions:
-  search:
-    handler: index.handlerv2
+  getsearch:
+    handler: index.dosearch
     events:
       - http:
           path: /request
-          method: post     
+          method: post
+      - http:
+          path: /search
+          method: get                
           
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
