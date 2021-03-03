@@ -25,6 +25,8 @@ provider:
   runtime: nodejs12.x
   lambdaHashingVersion: 20201221
   region: us-east-1
+  apiGateway:
+    shouldStartNameWithService: true
 
 # you can overwrite defaults here
 #  stage: dev
@@ -60,6 +62,9 @@ provider:
 
 functions:
   getsearch:
+    environment:
+      GOOGLE_API_KEY: ${ssm:/crypto-seo_google-api-key~true}
+      SEARCH_ENG_ID: ${ssm:/crypto-seo_search-eng-id~true}
     handler: index.dosearch
     events:
       - http:
