@@ -35,7 +35,7 @@ deploy:
   skip_cleanup: true
   script: bash scripts/deploy.sh
   on:
-    branch: full-deployment
+    branch: master
 
 after_deploy:
 - aws s3 sync $TRAVIS_BUILD_DIR/build s3://crypto-seo/deployment/build
