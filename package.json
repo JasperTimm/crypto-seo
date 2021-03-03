@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "npx webpack serve --open --config webpack.dev.js",
-    "build": "npx truffle compile && npx webpack --config webpack.prod.js",
+    "build-contract": "npx truffle compile",
+    "build-frontend": "npx webpack --config webpack.prod.js",
     "test": "NODE_ENV=test npx truffle test"
   },
   "keywords": [],
