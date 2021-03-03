@@ -6,10 +6,10 @@ node_js:
 before_install:
 - npm install -g serverless
 - pip install awscli
-- mkdir build
-- mkdir .serverless
-- aws s3 sync s3://crypto-seo/deployment/build ./build
-- aws s3 sync s3://crypto-seo/deployment/.serverless ./.serverless
+- mkdir -p $TRAVIS_BUILD_DIR/build
+- mkdir -p $TRAVIS_BUILD_DIR/googleSearchAdapter/.serverless
+- aws s3 sync s3://crypto-seo/deployment/build $TRAVIS_BUILD_DIR/build
+- aws s3 sync s3://crypto-seo/deployment/.serverless $TRAVIS_BUILD_DIR/googleSearchAdapter/.serverless
 
 install:
 - npm install
@@ -34,7 +34,7 @@ deploy:
   provider: script
   skip_cleanup: true
   script:
-  - serverless deploy
+  - cd googleSearchAdapter && serverless deploy && cd ..
   - truffle migrate --network kovaninfura
   - npm run build-frontend
   - rsync -r --delete-after $TRAVIS_BUILD_DIR/dist travis-ci@jaspa.codes:/var/www/crypto-seo
@@ -42,5 +42,5 @@ deploy:
     branch: full-deployment
 
 after_deploy:
-- aws s3 sync ./build s3://crypto-seo/deployment/build
-- aws s3 sync ./.serverless s3://crypto-seo/deployment/.serverless
+- aws s3 sync $TRAVIS_BUILD_DIR/build s3://crypto-seo/deployment/build
+- aws s3 sync $TRAVIS_BUILD_DIR/googleSearchAdapter/.serverless s3://crypto-seo/deployment/.serverless
