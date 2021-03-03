@@ -5,7 +5,10 @@ import { Container, Form, Card, Col, InputGroup } from 'react-bootstrap'
 import ModalDialog from './modal'
 
 const LINK_TOKEN_MULTIPLIER = 10**18
-const ORACLE_PAYMENT = 1 * LINK_TOKEN_MULTIPLIER
+//TODO: Be nice to have these amounts in a config file
+const SLEEP_PAYMENT = 0.1 * LINK_TOKEN_MULTIPLIER
+const SEARCH_PAYMENT = 0.1 * LINK_TOKEN_MULTIPLIER
+const LINK_PAYMENT = SLEEP_PAYMENT + SEARCH_PAYMENT
 
 export default class Create extends Component {
     constructor(props){
@@ -73,7 +76,7 @@ export default class Create extends Component {
        let linkBal = await this.getEth().LinkTokenContract.methods.balanceOf(this.getEth().currentAccount).call(
          {from: this.getEth().currentAccount})
  
-       if (linkBal < ORACLE_PAYMENT) {
+       if (linkBal < LINK_PAYMENT) {
          this.showSimpleModal("Insufficient LINK", "This account has insufficient LINK to create this contract")
          return
        }
@@ -127,7 +130,7 @@ export default class Create extends Component {
        }
  
        console.log("About to call approve on LINK token...")
-       this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(ORACLE_PAYMENT)).send( 
+       this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(LINK_PAYMENT)).send( 
          {from: this.getEth().currentAccount})
          .once('transactionHash', onWaiting)
          .on('error', onError)
