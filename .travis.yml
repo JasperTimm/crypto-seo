@@ -15,7 +15,6 @@ install:
 - npm install
 
 script:
-- npm run build-contract
 - npm run test
 
 addons:

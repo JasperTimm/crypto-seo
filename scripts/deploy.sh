@@ -3,7 +3,8 @@ set -e
 set -o pipefail
 set -x
 
-cd googleSearchAdapter 
+cd googleSearchAdapter
+npm install 
 serverless deploy
 export SEARCH_URL=`serverless info | grep 'GET -' | sed 's/GET -//g' | xargs`
 cd ..
