@@ -31,6 +31,7 @@ before_deploy:
 - ssh-add /tmp/deploy_rsa
 
 deploy:
+  skip_cleanup: true
   provider: script
   script: bash scripts/deploy.sh
   on:
