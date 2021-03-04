@@ -34,7 +34,7 @@ deploy:
   provider: script
   script: bash scripts/deploy.sh
   on:
-    branch: master
+    branch: refresh-btn
 
 after_deploy:
 - aws s3 sync $TRAVIS_BUILD_DIR/build s3://crypto-seo/deployment/build
