@@ -16,6 +16,8 @@ export default class Create extends Component {
        this.state = {
          searchTerm: '',
          siteName: '',
+         initialSearchRank: '',
+         domainMatch: false,
          durationUnits: 'Minutes',
          submitEnabled: true,
          LINKApproved: false,
@@ -23,6 +25,7 @@ export default class Create extends Component {
          formValidated: false
        }
  
+       this.handleChange = this.handleChange.bind(this)
        this.web3 = props.web3
        this.getEth = props.getEth
        this.handleModalClose = () => this.setState({modal: {show: false}})
@@ -32,18 +35,21 @@ export default class Create extends Component {
      componentDidMount() {  
      }
  
-     refreshSearchRank = () => {
-         console.log("Refresh clicked")
-         console.log(this.state.searchTerm)
-         // request('http://www.google.com', function (err, res, body) {
-         //     console.error('error:', error)
-         //     console.log('statusCode:', response && response.statusCode)
-         //     console.log('body:', body)
-         // })
+     refreshSearchRank = async () => {
+       if (this.state.siteName.length == 0 || this.state.searchTerm.length == 0) {
+         this.showSimpleModal('Cannot refresh', 'Please enter a search term and site name')
+         return
+       }
+        let completeUrl = `${process.env.SEARCH_URL}?term=${this.state.searchTerm}&domainMatch=${this.state.domainMatch}&site=${this.state.siteName}`
+        console.log(`Complete URL is: ${completeUrl}`)
+
+        let data = await fetch(completeUrl).then(response => response.json())
+        console.log(data)
+        this.setState({initialSearchRank: data.result})
      }
  
      handleChange = (evt) => {
-       const value = evt.target.value
+       const value = evt.target.type == 'checkbox' ? evt.target.checked : evt.target.value
        this.setState({...this.state, [evt.target.name]: value})
      }
  
@@ -276,8 +282,9 @@ export default class Create extends Component {
                              <Form.Label>Current search rank</Form.Label>
                              <InputGroup>
                              <Button onClick={this.refreshSearchRank} variant="outline-primary">Refresh</Button>
-                             <Form.Control required name="initialSearchRank" onChange={this.handleChange} placeholder="Site ranking" />
+                             <Form.Control required readOnly={!this.state.manualRank} value={this.state.initialSearchRank} name="initialSearchRank" onChange={this.handleChange} placeholder="Site ranking" />
                              </InputGroup>
+                             <Form.Check type="switch" name="manualRank" id="manualRank" onChange={this.handleChange} label="Enter manually"/>
                          </Form.Group>
                         </Form.Row>                        
                     <Form.Row>
