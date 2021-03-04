@@ -73,7 +73,8 @@ exports.dosearch = (event, context, callback) => {
     callback(null, {
       statusCode: statusCode,
       body: JSON.stringify(data),
-      isBase64Encoded: false
+      isBase64Encoded: false,
+      headers: {'Access-Control-Allow-Origin': '*'}
     })
   })  
 }

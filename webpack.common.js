@@ -1,10 +1,25 @@
-const path = require('path')
+const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const webpack = require('webpack');
 
 module.exports = {
    entry: [
       'babel-regenerator-runtime',
       path.join(__dirname, 'src/js', 'index.js') // Our frontend will be inside the src folder
-   ], 
+   ],
+   output: {
+      path: process.env.OUTPUT_DIR || path.join(__dirname, 'dist'),
+      filename: 'build.js', // The final file will be created in dist/build.js
+      sourceMapFilename: "[name].js.map"
+     },    
+   plugins: [
+      new webpack.EnvironmentPlugin(['SEARCH_URL']),
+      new CleanWebpackPlugin(),
+      new HtmlWebpackPlugin({
+        template: 'src/html/index.html'
+      }),
+    ],    
    module: {
       rules: [
         // { test: /\.json$/, use: ['json-loader'] },

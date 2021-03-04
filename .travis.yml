@@ -15,7 +15,6 @@ install:
 - npm install
 
 script:
-- npm run build-contract
 - npm run test
 
 addons:
@@ -31,8 +30,8 @@ before_deploy:
 - ssh-add /tmp/deploy_rsa
 
 deploy:
-  provider: script
   skip_cleanup: true
+  provider: script
   script: bash scripts/deploy.sh
   on:
     branch: master
