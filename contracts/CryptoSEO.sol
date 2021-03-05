@@ -90,6 +90,10 @@ contract CryptoSEO is ChainlinkClient, Ownable {
   //Ensure we can receive Eth transfers for testing
   receive() external payable {}
 
+  function linkAddress() public view returns (address) {
+    return address(link);
+  }
+
   function setOracle(address _oracle) public onlyOwner {
     oracle = _oracle;
   }

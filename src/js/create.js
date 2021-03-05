@@ -3,12 +3,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import Button from 'react-bootstrap/Button'
 import { Container, Form, Card, Col, InputGroup } from 'react-bootstrap'
 import ModalDialog from './modal'
-
-const LINK_TOKEN_MULTIPLIER = 10**18
-//TODO: Be nice to have these amounts in a config file
-const SLEEP_PAYMENT = 0.1 * LINK_TOKEN_MULTIPLIER
-const SEARCH_PAYMENT = 0.1 * LINK_TOKEN_MULTIPLIER
-const LINK_PAYMENT = SLEEP_PAYMENT + SEARCH_PAYMENT
+import consts from './consts'
 
 export default class Create extends Component {
     constructor(props){
@@ -30,6 +25,7 @@ export default class Create extends Component {
        this.getEth = props.getEth
        this.handleModalClose = () => this.setState({modal: {show: false}})
        this.selectPage = props.selectPage
+       this.LINK_PAYMENT = this.getEth().consts.SLEEP_PAYMENT.add(this.getEth().consts.SEARCH_PAYMENT)
     }
  
      componentDidMount() {  
@@ -40,7 +36,7 @@ export default class Create extends Component {
          this.showSimpleModal('Cannot refresh', 'Please enter a search term and site name')
          return
        }
-        let completeUrl = `${process.env.SEARCH_URL}?term=${this.state.searchTerm}&domainMatch=${this.state.domainMatch}&site=${this.state.siteName}`
+        let completeUrl = `${this.getEth().consts.searchUrl}?term=${this.state.searchTerm}&domainMatch=${this.state.domainMatch}&site=${this.state.siteName}`
         console.log(`Complete URL is: ${completeUrl}`)
 
         let data = await fetch(completeUrl).then(response => response.json())
@@ -79,19 +75,19 @@ export default class Create extends Component {
          return
        }
 
-       let linkBal = await this.getEth().LinkTokenContract.methods.balanceOf(this.getEth().currentAccount).call(
-         {from: this.getEth().currentAccount})
+       let linkBal = new this.web3.utils.BN(await this.getEth().LinkTokenContract.methods.balanceOf(this.getEth().currentAccount).call(
+         {from: this.getEth().currentAccount}))
  
-       if (linkBal < LINK_PAYMENT) {
+       if (linkBal.lt(this.LINK_PAYMENT)) {
          this.showSimpleModal("Insufficient LINK", "This account has insufficient LINK to create this contract")
          return
        }
- 
+       
        this.showModal({
         show: true,
         title: "Approve LINK payment", 
         message: <>
-                  In order to create this SEO Commitment we need to approve a transfer of <b>1 LINK</b> to this contract from 
+                  In order to create this SEO Commitment we need to approve a transfer of <b>{this.web3.utils.fromWei(this.LINK_PAYMENT)} LINK</b> to this contract from 
                   your account.
                   <br /><br />
                   This will cover the cost of using the Chainlink Oracle to lookup the search rankings 
@@ -136,7 +132,7 @@ export default class Create extends Component {
        }
  
        console.log("About to call approve on LINK token...")
-       this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(LINK_PAYMENT)).send( 
+       this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(this.LINK_PAYMENT)).send( 
          {from: this.getEth().currentAccount})
          .once('transactionHash', onWaiting)
          .on('error', onError)
