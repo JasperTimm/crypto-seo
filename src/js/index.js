@@ -11,13 +11,17 @@ const CryptoSEO = require('../../build/contracts/CryptoSEO')
 const LinkToken = require('../../build/contracts/LinkTokenInterface')
 const LinkAddress = {
   "networks" : {
-    "4": "0x01BE23585060835E02B77ef475b0Cc51aA1e0709"
+    "1": "0x514910771af9ca656af840dff83e8264ecf986ca",
+    "4": "0x01BE23585060835E02B77ef475b0Cc51aA1e0709",
+    "5": "0x326c977e6efc84e512bb9c30f76e30c160ed06fb",
+    "42": "0xa36085F69e2889c224210F603D836748e7dC0088"
   }
 }
 const networkNames = {
   "1": "Mainnet",
   "3": "Ropsten",
   "4": "Rinkeby",
+  "5": "Goerli",
   "42": "Kovan"
 }
 
