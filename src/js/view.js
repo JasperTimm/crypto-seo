@@ -1,11 +1,7 @@
-
 import React, { Component } from 'react'
 import { Container, Form, Card, Button, Table, Col } from 'react-bootstrap'
 import ModalDialog from './modal'
-
-const statusCodes = ["Created", "Processing", "Completed"]
-const LINK_TOKEN_MULTIPLIER = 10**18
-const SEARCH_PAYMENT = 0.1 * LINK_TOKEN_MULTIPLIER
+import consts from './consts'
 
 export default class View extends Component {
     constructor(props) {
@@ -77,7 +73,7 @@ export default class View extends Component {
         let timeNow = Math.floor(Date.now() / 1000)
         let REQ_EXP = parseInt(await this.getEth().CryptoSEOContract.methods.REQUEST_EXPIRY().call())
 
-        return comt.status == statusCodes.indexOf('Processing') && timeNow > parseInt(comt.timeToExecute) + REQ_EXP
+        return comt.isValue && comt.status != consts.statusCodes.indexOf('Completed') && timeNow > parseInt(comt.timeToExecute) + REQ_EXP
     }
 
     curPayout = async () => {
@@ -94,7 +90,7 @@ export default class View extends Component {
                         <td><b>seoCommitmentId</b></td>
                         <td>{this.state.seoCommitmentId}</td>
                     </tr>
-                    {Object.keys(this.state.seoCommitment).filter((k) => k != "isValue").map((field) => {
+                    {Object.keys(this.state.seoCommitment).filter((k) => k != "isValue" && k != "requestId").map((field) => {
                         let val = this.state.seoCommitment[field]
                         return (
                             <tr key={field}>
@@ -117,7 +113,7 @@ export default class View extends Component {
             let d = new Date(val * 1000)
             return (<>{val} &nbsp;&nbsp; <i>({String(d)})</i></>)
         } else if (field == "status") {
-            return (<>{val} &nbsp;&nbsp; <i>({statusCodes[val]})</i></>)
+            return (<>{val} &nbsp;&nbsp; <i>({consts.statusCodes[val]})</i></>)
         } else {
             return val
         }
@@ -184,10 +180,10 @@ export default class View extends Component {
           return
         }
  
-        let linkBal = await this.getEth().LinkTokenContract.methods.balanceOf(this.getEth().currentAccount).call(
-          {from: this.getEth().currentAccount})
+        let linkBal = new this.web3.utils.BN(await this.getEth().LinkTokenContract.methods.balanceOf(this.getEth().currentAccount).call(
+          {from: this.getEth().currentAccount}))
   
-        if (linkBal < SEARCH_PAYMENT) {
+        if (linkBal.lt(this.getEth().consts.SEARCH_PAYMENT)) {
           this.showSimpleModal("Insufficient LINK", "This account has insufficient LINK to rerun this contract")
           return
         }
@@ -233,7 +229,7 @@ export default class View extends Component {
         }          
 
         console.log("About to call approve on LINK token...")
-        this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(SEARCH_PAYMENT)).send( 
+        this.getEth().LinkTokenContract.methods.approve(this.getEth().CryptoSEOContract._address, String(this.getEth().consts.SEARCH_PAYMENT)).send( 
             {from: this.getEth().currentAccount})
             .once('transactionHash', this.txWaiting)
             .on('error', this.txError)

@@ -7,23 +7,10 @@ import Create from './create'
 import View from './view'
 import NetworkIcon from '../../assets/network_icon.png'
 import UserIcon from '../../assets/user_icon.png'
+import consts from './consts'
+
 const CryptoSEO = require('../../build/contracts/CryptoSEO')
 const LinkToken = require('../../build/contracts/LinkTokenInterface')
-const LinkAddress = {
-  "networks" : {
-    "1": "0x514910771af9ca656af840dff83e8264ecf986ca",
-    "4": "0x01BE23585060835E02B77ef475b0Cc51aA1e0709",
-    "5": "0x326c977e6efc84e512bb9c30f76e30c160ed06fb",
-    "42": "0xa36085F69e2889c224210F603D836748e7dC0088"
-  }
-}
-const networkNames = {
-  "1": "Mainnet",
-  "3": "Ropsten",
-  "4": "Rinkeby",
-  "5": "Goerli",
-  "42": "Kovan"
-}
 
 class Home extends Component {
   constructor(props) {
@@ -127,7 +114,7 @@ class App extends Component {
     })
   }
 
-  handleChainChanged = (chainId) => {
+  handleChainChanged = async (chainId) => {
     console.log("Chain changed to: " + chainId)
     
     const networkId = String(parseInt(chainId))
@@ -137,20 +124,36 @@ class App extends Component {
       this.setState({
         eth: {
           ...this.state.eth,
-          networkName: networkNames[networkId],
+          networkName: consts.networkNames[networkId],
           CryptoSEOContract: null,
           LinkTokenContract: null
         }
       })          
     } else {
+      let cryptoSEO = new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address)
+      let cryptoSEOConsts = await this.getConsts(cryptoSEO)
       this.setState({
         eth: {
           ...this.state.eth,
-          networkName: networkNames[networkId],
-          CryptoSEOContract: new this.web3.eth.Contract(CryptoSEO.abi, CryptoSEO.networks[networkId].address),
-          LinkTokenContract: new this.web3.eth.Contract(LinkToken.abi, LinkAddress.networks[networkId])
+          networkName: consts.networkNames[networkId],
+          CryptoSEOContract: cryptoSEO,
+          LinkTokenContract: new this.web3.eth.Contract(LinkToken.abi, cryptoSEOConsts.linkAddress),
+          consts: cryptoSEOConsts,
         }
       })
+    }
+  }
+
+  getConsts = async (cryptoSEO) => {
+    return {
+      SLEEP_PAYMENT: new this.web3.utils.BN(await cryptoSEO.methods.SLEEP_PAYMENT().call()),
+      SEARCH_PAYMENT: new this.web3.utils.BN(await cryptoSEO.methods.SEARCH_PAYMENT().call()),
+      REQUEST_EXPIRY: parseInt(await cryptoSEO.methods.REQUEST_EXPIRY().call()),
+      oracle: await cryptoSEO.methods.oracle().call(),
+      sleepJobId: await cryptoSEO.methods.sleepJobId().call(),
+      searchJobId: await cryptoSEO.methods.searchJobId().call(),
+      searchUrl: await cryptoSEO.methods.searchUrl().call(),
+      linkAddress: await cryptoSEO.methods.linkAddress().call(),    
     }
   }
 
@@ -196,10 +199,16 @@ class App extends Component {
       <Card>
         <Card.Header>Network Error</Card.Header>
         <Card.Body>
-            The Crypto SEO contract is not deployed to this network. Please change to the Rinkeby testnet.
+            The Crypto SEO contract is not deployed to this network. 
+            <br/><br/>
+            Please change to one of the following networks: {this.getCryptoSEONetworkList().join(", ")}
         </Card.Body>
       </Card>      
     )
+  }
+
+  getCryptoSEONetworkList = () => {
+    return Object.keys(CryptoSEO.networks).map(id => consts.networkNames[id])
   }
 
   navIcon(src) {

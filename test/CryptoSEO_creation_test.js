@@ -28,7 +28,6 @@ contract('CryptoSEO commitment creation', accounts => {
   const sleepPayment = 0.1 * 10 ** 18
   const searchPayment = 0.1 * 10 ** 18
   const linkPayment = sleepPayment + searchPayment
-  var BN = web3.utils.BN
 
   let link, oc, cc
 
