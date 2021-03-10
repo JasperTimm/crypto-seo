@@ -188,11 +188,13 @@ export default class View extends Component {
           return
         }
   
+        let searchPmt = this.web3.utils.fromWei(this.getEth().consts.SEARCH_PAYMENT)
+
         this.showModal({
          show: true,
          title: "Approve LINK payment", 
          message: <>
-                   In order to rerun this SEO Commitment we need to approve a transfer of <b>1 LINK</b> to this contract from 
+                   In order to rerun this SEO Commitment we need to approve a transfer of <b>{searchPmt} LINK</b> to this contract from 
                    your account.
                    <br /><br />
                    This will cover the cost of using the Chainlink Oracle to lookup the search rankings 
