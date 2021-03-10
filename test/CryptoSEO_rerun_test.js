@@ -24,6 +24,7 @@ contract('CryptoSEO rerun', accounts => {
   }
 
   const zeroAddr = '0x0000000000000000000000000000000000000000'
+  const searchUrl = "http://test.com/search"
   const sleepPayment = 0.1 * 10 ** 18
   const searchPayment = 0.1 * 10 ** 18
   const linkPayment = sleepPayment + searchPayment  
@@ -34,7 +35,7 @@ contract('CryptoSEO rerun', accounts => {
   beforeEach(async () => {
     link = await LinkToken.new({ from: defaultAccount })
     oc = await Oracle.new(link.address, { from: defaultAccount })
-    cc = await CryptoSEO.new(link.address, oc.address, "001", "002", "http://test.com", { from: consumer })
+    cc = await CryptoSEO.new(link.address, oc.address, "001", "002", searchUrl, { from: consumer })
     await oc.setFulfillmentPermission(oracleNode, true, {
       from: defaultAccount,
     })
@@ -59,10 +60,13 @@ contract('CryptoSEO rerun', accounts => {
 
         requestEvent = (await cc.getPastEvents('RequestSearchSent'))[0]
         assert.equal(requestEvent.returnValues.commitmentId, 0)
+        let expectedUrl = `${searchUrl}?term=${validCommitment.searchTerm}&domainMatch=${validCommitment.domainMatch}&site=${validCommitment.site}`
+        assert.equal(requestEvent.returnValues.url, expectedUrl)
 
         reqId = requestEvent.returnValues.requestId
         assert.equal(reqId.length, 66)
         assert.equal(reqId.startsWith("0x"), true)
+        assert.notEqual(reqId, zeroAddr)
 
         searchReq = await cc.requestMap(reqId)
         assert.equal(searchReq.isValue, true)
