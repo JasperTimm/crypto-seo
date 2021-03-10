@@ -25,22 +25,57 @@ contract('CryptoSEO commitment fulfillment', accounts => {
     payee: stranger,
   }
 
+  const zeroAddr = '0x0000000000000000000000000000000000000000'
+  const searchUrl = "http://test.com/search"
   const sleepPayment = 0.1 * 10 ** 18
   const searchPayment = 0.1 * 10 ** 18
   const linkPayment = sleepPayment + searchPayment
   var BN = web3.utils.BN
 
-  let link, oc, cc, reqEvt
+  let link, oc, cc, reqEvt, reqSearchEvt
 
   beforeEach(async () => {
     link = await LinkToken.new({ from: defaultAccount })
     oc = await Oracle.new(link.address, { from: defaultAccount })
-    cc = await CryptoSEO.new(link.address, oc.address, "001", "002", "http://test.com", { from: consumer })
+    cc = await CryptoSEO.new(link.address, oc.address, "001", "002", searchUrl, { from: consumer })
     await oc.setFulfillmentPermission(oracleNode, true, {
       from: defaultAccount,
     })
   })
 
+  describe('#executeCommitment', () => {
+    beforeEach(async () => {
+      await link.approve(cc.address, String(linkPayment), {from: defaultAccount})
+      await cc.createSEOCommitment(validCommitment.site, validCommitment.searchTerm, validCommitment.domainMatch, validCommitment.initialSearchRank,
+        validCommitment.amtPerRankEth, validCommitment.maxPayableEth, validCommitment.timeToExecute, validCommitment.payee, {
+          from: defaultAccount,
+          value: validCommitment.maxPayableEth
+        })
+      let waitEvent = (await oc.getPastEvents('OracleRequest'))[0]
+      await oc.fulfillOracleRequest(waitEvent.returnValues.requestId, waitEvent.returnValues.payment, waitEvent.returnValues.callbackAddr,
+        waitEvent.returnValues.callbackFunctionId, waitEvent.returnValues.cancelExpiration, web3.utils.padLeft(web3.utils.toHex(0), 64), {
+          from: oracleNode
+        })
+      reqSearchEvt = (await cc.getPastEvents('RequestSearchSent'))[0]      
+    })
+
+    context('when executed correctly', () => {
+      it('sends the correct search request', async () => {
+        assert.equal(reqSearchEvt.returnValues.commitmentId, 0)
+        let expectedUrl = `${searchUrl}?term=${validCommitment.searchTerm}&domainMatch=${validCommitment.domainMatch}&site=${validCommitment.site}`
+        assert.equal(reqSearchEvt.returnValues.url, expectedUrl)
+
+        reqId = reqSearchEvt.returnValues.requestId
+        assert.equal(reqId.length, 66)
+        assert.equal(reqId.startsWith("0x"), true)
+        assert.notEqual(reqId, zeroAddr)
+
+        searchReq = await cc.requestMap(reqId)
+        assert.equal(searchReq.isValue, true)
+        assert.equal(searchReq.commitmentId, 0)
+      })
+    })
+  })
   
   describe('#fulfillCommitment', () => {
     beforeEach(async () => {
@@ -54,7 +89,8 @@ contract('CryptoSEO commitment fulfillment', accounts => {
       await oc.fulfillOracleRequest(waitEvent.returnValues.requestId, waitEvent.returnValues.payment, waitEvent.returnValues.callbackAddr,
         waitEvent.returnValues.callbackFunctionId, waitEvent.returnValues.cancelExpiration, web3.utils.padLeft(web3.utils.toHex(0), 64), {
           from: oracleNode
-        })      
+        })
+      reqSearchEvt = (await cc.getPastEvents('RequestSearchSent'))[0]      
       reqEvt = (await oc.getPastEvents('OracleRequest'))[0]
     })
 

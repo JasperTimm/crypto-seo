@@ -47,7 +47,8 @@ contract CryptoSEO is ChainlinkClient, Ownable {
 
   event RequestSearchSent(
     uint256 indexed commitmentId,
-    bytes32 indexed requestId
+    bytes32 indexed requestId,
+    string url
   );
 
   event RequestSearchFulfilled(
@@ -194,25 +195,22 @@ contract CryptoSEO is ChainlinkClient, Ownable {
     require(comt.isValue, "Not a valid commitment ID");
     require(comt.status == SeoCommitmentStatus.Created, "Commitment is not in 'Created' status");
 
-    bytes32 requestId = requestGoogleSearch(comt, this.fulfillCommitment.selector);
+    Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(searchJobId), address(this), this.fulfillCommitment.selector);
+    string memory domainMatchStr = comt.domainMatch ? "true" : "false";
+    string memory url = string(abi.encodePacked(searchUrl, "?term=", comt.searchTerm, "&domainMatch=", domainMatchStr, "&site=", comt.site));
+    req.add("get", url);
+    req.add("path", "result");
+    bytes32 requestId =  sendChainlinkRequestTo(oracle, req, SEARCH_PAYMENT);
+
     requestMap[requestId] = ChainlinkRequest(true, commitmentId);
 
     comt.status = SeoCommitmentStatus.Processing;
     comt.requestId = requestId;
     seoCommitmentList[commitmentId] = comt;
 
-    emit RequestSearchSent(commitmentId, requestId);
+    emit RequestSearchSent(commitmentId, requestId, url);
 
     return;
-  }
-
-  function requestGoogleSearch(SEOCommitment memory comt, bytes4 callbackSelector) private returns (bytes32 requestId)
-  {
-    Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32(searchJobId), address(this), callbackSelector);
-    string memory url = string(abi.encodePacked(searchUrl, "?term=", comt.searchTerm, "&domainMatch=", comt.domainMatch, "&site=", comt.site));
-    req.add("get", url);
-    req.add("path", "result");
-    return sendChainlinkRequestTo(oracle, req, SEARCH_PAYMENT);
   }
 
   function rerunExpiredCommitment(uint256 _commitmentId) public commitmentExpired(_commitmentId) {
