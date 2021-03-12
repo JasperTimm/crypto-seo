@@ -6,6 +6,7 @@ import { Container, Nav, Navbar, Jumbotron, Button, Form, Card } from 'react-boo
 import Create from './create'
 import View from './view'
 import About from './about'
+import Guide from './guide'
 import NetworkIcon from '../../assets/network_icon.png'
 import UserIcon from '../../assets/user_icon.png'
 import consts from './consts'
@@ -157,6 +158,10 @@ class App extends Component {
         return(
           <About />
         )
+      case "guide":
+        return(
+          <Guide />
+        )        
       case "create":
         return (
           this.state.eth.CryptoSEOContract 
@@ -234,7 +239,10 @@ class App extends Component {
               </Nav.Item>              
               <Nav.Item>
                 <Nav.Link eventKey="about" onSelect={this.simpleSelectPage}>About</Nav.Link>
-              </Nav.Item>              
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="guide" onSelect={this.simpleSelectPage}>Guide</Nav.Link>
+              </Nav.Item>                            
               <Nav.Item>
                 <Nav.Link eventKey="create" onSelect={this.simpleSelectPage}>Create</Nav.Link>
               </Nav.Item>
