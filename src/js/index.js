@@ -5,6 +5,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import { Container, Nav, Navbar, Jumbotron, Button, Form, Card } from 'react-bootstrap'
 import Create from './create'
 import View from './view'
+import About from './about'
 import NetworkIcon from '../../assets/network_icon.png'
 import UserIcon from '../../assets/user_icon.png'
 import consts from './consts'
@@ -23,34 +24,15 @@ class Home extends Component {
   render(){
     return (
       <Jumbotron>
-        <h1>Welcome to Crypto SEO</h1>
+        <h1>Crypto SEO</h1>
         <p>
-          This is a simple <a href="https://www.wikiwand.com/en/Decentralized_application">dApp</a> which
+          A simple dApp which
           enables users to create a commitment which enforces pay-for-performance search result rank increases.
         </p>
         <br />
         <br />
         <p>
           <Button variant="primary" onClick={() => {this.selectPage({name: "about"})}}>Learn more</Button>
-        </p>
-      </Jumbotron>      
-    )
-  }
-}
-
-class About extends Component {
-  constructor(props) {
-    super(props)
-    this.state = {
-    }
-  }
-
-  render(){
-    return (
-      <Jumbotron>
-        <h1>About</h1>
-        <p>
-          Here's how it works...
         </p>
       </Jumbotron>      
     )
